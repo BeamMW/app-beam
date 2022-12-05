@@ -37,6 +37,7 @@ APPVERSION_P = 1
 APPVERSION   = "$(APPVERSION_M).$(APPVERSION_N).$(APPVERSION_P)"
 
 ifeq ($(TARGET_NAME),TARGET_NANOS)
+	APP_STACK_SIZE = 2664
     ICONNAME=icons/nanos_app_boilerplate.gif
 else
     ICONNAME=icons/nanox_app_boilerplate.gif
@@ -103,6 +104,7 @@ CFLAGS  += -O3 -Os
 AS      := $(GCCPATH)arm-none-eabi-gcc
 LD      := $(GCCPATH)arm-none-eabi-gcc
 LDFLAGS += -O3 -Os
+LDFLAGS += -T script.ld
 LDLIBS  += -lm -lgcc -lc
 
 include $(BOLOS_SDK)/Makefile.glyphs
