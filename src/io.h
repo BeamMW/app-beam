@@ -48,7 +48,7 @@ int io_recv_command(void);
  * @return zero or positive integer if success, -1 otherwise.
  *
  */
-int io_send_response(const buffer_t *rdata, uint16_t sw);
+int io_send_response(const void*, unsigned int len, uint16_t sw);
 
 /**
  * Send APDU response (only status word) by filling

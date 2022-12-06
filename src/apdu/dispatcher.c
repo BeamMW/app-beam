@@ -26,7 +26,6 @@
 #include "../sw.h"
 #include "../common/buffer.h"
 #include "../handler/get_version.h"
-#include "../handler/get_app_name.h"
 #include "../handler/get_public_key.h"
 #include "../handler/sign_tx.h"
 
@@ -49,7 +48,11 @@ int apdu_dispatcher(const command_t *cmd) {
                 return io_send_sw(SW_WRONG_P1P2);
             }
 
-            return handler_get_app_name();
+            _Static_assert(APPNAME_LEN < MAX_APPNAME_LEN, "APPNAME must be at most 64 characters!");
+
+            return io_send_response(APPNAME, APPNAME_LEN, SW_OK);
+
+            //return handler_get_app_name();
         case GET_PUBLIC_KEY:
             if (cmd->p1 > 1 || cmd->p2 > 0) {
                 return io_send_sw(SW_WRONG_P1P2);

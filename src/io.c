@@ -121,16 +121,18 @@ int io_recv_command() {
     return ret;
 }
 
-int io_send_response(const buffer_t *rdata, uint16_t sw) {
+int io_send_response(const void* pPtr, unsigned int len, uint16_t sw) {
     int ret = -1;
 
-    if (rdata != NULL) {
-        if (rdata->size - rdata->offset > IO_APDU_BUFFER_SIZE - 2 ||  //
-            !buffer_copy(rdata, G_io_apdu_buffer, sizeof(G_io_apdu_buffer))) {
+    if (len)
+    {
+        if (len > IO_APDU_BUFFER_SIZE - 2)
             return io_send_sw(SW_WRONG_RESPONSE_LENGTH);
-        }
-        G_output_len = rdata->size - rdata->offset;
-        PRINTF("<= SW=%04X | RData=%.*H\n", sw, rdata->size, rdata->ptr);
+
+        memcpy(G_io_apdu_buffer, pPtr, len);
+        G_output_len = len;
+
+        PRINTF("<= SW=%04X | RData=%.*H\n", sw, len, pPtr);
     } else {
         G_output_len = 0;
         PRINTF("<= SW=%04X | RData=\n", sw);
@@ -158,5 +160,5 @@ int io_send_response(const buffer_t *rdata, uint16_t sw) {
 }
 
 int io_send_sw(uint16_t sw) {
-    return io_send_response(NULL, sw);
+    return io_send_response(NULL, 0, sw);
 }
