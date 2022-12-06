@@ -71,7 +71,14 @@ int OnApduRcv(unsigned int rcvLen)
         if (pCmd->p1 != 0 || pCmd->p2 != 0)
             return io_send_sw(SW_WRONG_P1P2);
 
-        return handler_get_version();
+        _Static_assert(MAJOR_VERSION >= 0 && MAJOR_VERSION <= UINT8_MAX, "MAJOR version must be between 0 and 255!");
+        _Static_assert(MINOR_VERSION >= 0 && MINOR_VERSION <= UINT8_MAX, "MINOR version must be between 0 and 255!");
+        _Static_assert(PATCH_VERSION >= 0 && PATCH_VERSION <= UINT8_MAX, "PATCH version must be between 0 and 255!");
+
+        static const uint8_t pRes[] = { MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION };
+        _Static_assert(sizeof(pRes) == APPVERSION_LEN);
+
+        return io_send_response(pRes, sizeof(pRes), SW_OK);
 
     case GET_APP_NAME:
 
