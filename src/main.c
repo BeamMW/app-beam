@@ -37,12 +37,23 @@ int OnApduRcv(unsigned int rcvLen)
 {
     _Static_assert(sizeof(command_t) == 5, "");
 
-    command_t* pCmd = (command_t*) G_io_apdu_buffer;
-    if ((rcvLen < sizeof(command_t)) || (rcvLen - sizeof(command_t) != pCmd->lc))
+    if (rcvLen < sizeof(command_t))
     {
-        PRINTF("=> /!\\ BAD LENGTH: %.*H\n", rcvLen, G_io_apdu_buffer);
+        PRINTF("=> /!\\ too short\n");
+        return 0; // ignore
+    }
+
+    command_t* pCmd = (command_t*) G_io_apdu_buffer;
+    if (rcvLen - sizeof(command_t) != pCmd->lc)
+    {
+        PRINTF("=> /!\\ Incorrect apdu LC: %.*H\n", rcvLen, G_io_apdu_buffer);
+
+#ifdef DEBUG
+        pCmd->lc = (uint8_r) (rcvLen - sizeof(command_t));
+#else // DEBUG
         io_send_sw(SW_WRONG_DATA_LENGTH);
         return 0; // ignore
+#endif // DEBUG
     }
 
     PRINTF("=> CLA=%02X | INS=%02X | P1=%02X | P2=%02X | Lc=%02X | CData=%.*H\n",
@@ -113,7 +124,7 @@ int OnApduRcv(unsigned int rcvLen)
         return handler_sign_tx(&buf, pCmd->p1, (bool)(pCmd->p2 & P2_MORE));
     }
 
-        return io_send_sw(SW_INS_NOT_SUPPORTED);
+    return io_send_sw(SW_INS_NOT_SUPPORTED);
 }
 
 
@@ -121,9 +132,6 @@ int OnApduRcv(unsigned int rcvLen)
  * Handle APDU command received and send back APDU response using handlers.
  */
 void app_main() {
-    // Length of APDU command received in G_io_apdu_buffer
-    int input_len = 0;
-
     io_init();
 
     // Reset context
@@ -134,14 +142,20 @@ void app_main() {
             TRY {
 
                 // Receive command bytes in G_io_apdu_buffer
-                if ((input_len = io_recv_command()) < 0) {
+                int inpLen = io_recv_command();
+                if (inpLen < 0)
+                {
                     CLOSE_TRY;
                     return;
                 }
 
+                PRINTF("=> Incoming command: %.*H\n", inpLen, G_io_apdu_buffer);
+
+				//for (uint32_t i = 0; i < sizeof(pBigBuf); i++)
+				//	pBigBuf[i] = G_io_apdu_buffer[0];
 
                 // Dispatch structured APDU command to handler
-                if (OnApduRcv(input_len) < 0) {
+                if (OnApduRcv(inpLen) < 0) {
                     CLOSE_TRY;
                     return;
                 }
