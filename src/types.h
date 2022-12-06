@@ -29,14 +29,17 @@ typedef enum {
 /**
  * Structure with fields of APDU command.
  */
+
+#pragma pack (push, 1)
 typedef struct {
     uint8_t cla;    /// Instruction class
     command_e ins;  /// Instruction code
     uint8_t p1;     /// Instruction parameter 1
     uint8_t p2;     /// Instruction parameter 2
     uint8_t lc;     /// Length of command data
-    uint8_t *data;  /// Command data
+    uint8_t data[0];  /// Command data, variable length
 } command_t;
+#pragma pack (pop)
 
 /**
  * Enumeration with parsing state.
