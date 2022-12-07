@@ -37,14 +37,14 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
         explicit_bzero(&G_context, sizeof(G_context));
         G_context.req_type = CONFIRM_TRANSACTION;
         G_context.state = STATE_NONE;
-
+/*
         if (!buffer_read_u8(cdata, &G_context.bip32_path_len) ||
             !buffer_read_bip32_path(cdata,
                                     G_context.bip32_path,
                                     (size_t) G_context.bip32_path_len)) {
             return io_send_sw(SW_WRONG_DATA_LENGTH);
         }
-
+*/
         return io_send_sw(SW_OK);
     } else {  // parse transaction
         if (G_context.req_type != CONFIRM_TRANSACTION) {
@@ -52,7 +52,7 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
         }
 
         if (more) {  // more APDUs with transaction part
-            if (G_context.tx_info.raw_tx_len + cdata->size > MAX_TRANSACTION_LEN &&  //
+/*            if (G_context.tx_info.raw_tx_len + cdata->size > MAX_TRANSACTION_LEN &&  //
                 !buffer_move(cdata,
                              G_context.tx_info.raw_tx + G_context.tx_info.raw_tx_len,
                              cdata->size)) {
@@ -60,10 +60,10 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
             }
 
             G_context.tx_info.raw_tx_len += cdata->size;
-
+*/
             return io_send_sw(SW_OK);
         } else {  // last APDU, let's parse and sign
-            if (G_context.tx_info.raw_tx_len + cdata->size > MAX_TRANSACTION_LEN ||  //
+/*            if (G_context.tx_info.raw_tx_len + cdata->size > MAX_TRANSACTION_LEN ||  //
                 !buffer_move(cdata,
                              G_context.tx_info.raw_tx + G_context.tx_info.raw_tx_len,
                              cdata->size)) {
@@ -81,9 +81,9 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
             if (status != PARSING_OK) {
                 return io_send_sw(SW_TX_PARSING_FAIL);
             }
-
+*/
             G_context.state = STATE_PARSED;
-
+/*
             cx_sha3_t keccak256;
             cx_keccak_init(&keccak256, 256);
             cx_hash((cx_hash_t *) &keccak256,
@@ -94,7 +94,7 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
                     sizeof(G_context.tx_info.m_hash));
 
             PRINTF("Hash: %.*H\n", sizeof(G_context.tx_info.m_hash), G_context.tx_info.m_hash);
-
+*/
             return ui_display_transaction();
         }
     }

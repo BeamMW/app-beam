@@ -84,11 +84,5 @@ typedef struct {
  */
 typedef struct {
     state_e state;  /// state of the context
-    union {
-        pubkey_ctx_t pk_info;       /// public key context
-        transaction_ctx_t tx_info;  /// transaction context
-    };
     request_type_e req_type;              /// user request
-    uint32_t bip32_path[MAX_BIP32_PATH];  /// BIP32 path
-    uint8_t bip32_path_len;               /// length of BIP32 path
 } global_ctx_t;

@@ -37,7 +37,7 @@ APPVERSION_P = 1
 APPVERSION   = "$(APPVERSION_M).$(APPVERSION_N).$(APPVERSION_P)"
 
 ifeq ($(TARGET_NAME),TARGET_NANOS)
-	APP_STACK_SIZE = 2664
+	APP_STACK_SIZE = 3380
     ICONNAME=icons/nanos_app_boilerplate.gif
 else
     ICONNAME=icons/nanox_app_boilerplate.gif
@@ -63,6 +63,8 @@ endif
 
 ifeq ($(TARGET_NAME),TARGET_NANOS)
     DEFINES += IO_SEPROXYHAL_BUFFER_SIZE_B=128
+    CFLAGS  += -foptimize-sibling-calls
+    # CFLAGS  += -fconserve_stack -finline-max-stacksize=100
 else
     DEFINES += IO_SEPROXYHAL_BUFFER_SIZE_B=300
     DEFINES += HAVE_GLO096

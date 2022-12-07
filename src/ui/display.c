@@ -94,18 +94,18 @@ int ui_display_address() {
     }
 
     memset(g_bip32_path, 0, sizeof(g_bip32_path));
-    if (!bip32_path_format(G_context.bip32_path,
+/*    if (!bip32_path_format(G_context.bip32_path,
                            G_context.bip32_path_len,
                            g_bip32_path,
                            sizeof(g_bip32_path))) {
         return io_send_sw(SW_DISPLAY_BIP32_PATH_FAIL);
     }
-
+*/
     memset(g_address, 0, sizeof(g_address));
     uint8_t address[ADDRESS_LEN] = {0};
-    if (!address_from_pubkey(G_context.pk_info.raw_public_key, address, sizeof(address))) {
+/*    if (!address_from_pubkey(G_context.pk_info.raw_public_key, address, sizeof(address))) {
         return io_send_sw(SW_DISPLAY_ADDRESS_FAIL);
-    }
+    }*/
     snprintf(g_address, sizeof(g_address), "0x%.*H", sizeof(address), address);
 
     g_validate_callback = &ui_action_validate_pubkey;
@@ -152,17 +152,17 @@ int ui_display_transaction() {
 
     memset(g_amount, 0, sizeof(g_amount));
     char amount[30] = {0};
-    if (!format_fpu64(amount,
+/*    if (!format_fpu64(amount,
                       sizeof(amount),
                       G_context.tx_info.transaction.value,
                       EXPONENT_SMALLEST_UNIT)) {
         return io_send_sw(SW_DISPLAY_AMOUNT_FAIL);
-    }
+    }*/
     snprintf(g_amount, sizeof(g_amount), "BOL %.*s", sizeof(amount), amount);
     PRINTF("Amount: %s\n", g_amount);
 
     memset(g_address, 0, sizeof(g_address));
-    snprintf(g_address, sizeof(g_address), "0x%.*H", ADDRESS_LEN, G_context.tx_info.transaction.to);
+    //snprintf(g_address, sizeof(g_address), "0x%.*H", ADDRESS_LEN, G_context.tx_info.transaction.to);
 
     g_validate_callback = &ui_action_validate_transaction;
 
