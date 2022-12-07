@@ -195,12 +195,18 @@ extern unsigned long _stack;
 void StackTestFunc()
 {
     struct {
-        uint32_t myVal;
-        secp256k1_gej gej;
+//        secp256k1_gej gej;
         secp256k1_scalar s1, s2;
         MultiMac_WNaf wnaf;
         MultiMac_Context mmCtx;
+        Kdf kdf1;
+        Kdf kdf2;
+        UintBig hv;
     } s;
+
+    memset(&s.hv, 0, sizeof(s.hv));
+    Kdf_Init(&s.kdf1, &s.hv);
+
 
     // set
     uint32_t* pMark = (uint32_t*) &_stack;
@@ -208,6 +214,8 @@ void StackTestFunc()
         (*pMark) = STACK_MARK;
 
     // invoke
+
+/*   
     Context* pCtx = Context_get();
 
     memset(&s.s1, 0xa5, sizeof(s.s1));
@@ -224,13 +232,11 @@ void StackTestFunc()
     s.mmCtx.m_pZDenom = 0;
 
     MultiMac_Calculate(&s.mmCtx);
+*/
 
-    /*
-        Kdf kdf1, kdf2;
-        memset(&kdf1, 0, sizeof(kdf1));
 
-        Kdf_getChild(&kdf2, 14, &kdf1);
-    */
+    Kdf_getChild(&s.kdf2, 14, &s.kdf1);
+    //Kdf_Derive_PKey(&s.kdf1, &s.hv, &s.s1);
 
     // check
     pMark = (uint32_t*) &_stack;
