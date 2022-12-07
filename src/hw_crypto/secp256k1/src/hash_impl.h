@@ -46,6 +46,7 @@ static void secp256k1_sha256_initialize(secp256k1_sha256_t *hash) {
 }
 
 /** Perform one SHA-256 transformation, processing 16 big endian 32-bit words. */
+__stack_hungry__
 static void secp256k1_sha256_transform(uint32_t* s, const uint32_t* chunk) {
     uint32_t a = s[0], b = s[1], c = s[2], d = s[3], e = s[4], f = s[5], g = s[6], h = s[7];
     uint32_t w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15;
@@ -145,6 +146,7 @@ static void secp256k1_sha256_write(secp256k1_sha256_t *hash, const unsigned char
     }
 }
 
+__stack_hungry__
 static void secp256k1_sha256_finalize(secp256k1_sha256_t *hash, unsigned char *out32) {
     static const unsigned char pad[64] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     uint32_t sizedesc[2];
@@ -161,6 +163,7 @@ static void secp256k1_sha256_finalize(secp256k1_sha256_t *hash, unsigned char *o
     memcpy(out32, (const unsigned char*)out, 32);
 }
 
+__stack_hungry__
 static void secp256k1_hmac_sha256_initialize(secp256k1_hmac_sha256_t *hash, const unsigned char *key, size_t keylen) {
     int n;
     unsigned char rkey[64];
@@ -193,6 +196,7 @@ static void secp256k1_hmac_sha256_write(secp256k1_hmac_sha256_t *hash, const uns
     secp256k1_sha256_write(&hash->inner, data, size);
 }
 
+__stack_hungry__
 static void secp256k1_hmac_sha256_finalize(secp256k1_hmac_sha256_t *hash, unsigned char *out32) {
     unsigned char temp[32];
     secp256k1_sha256_finalize(&hash->inner, temp);
@@ -201,7 +205,7 @@ static void secp256k1_hmac_sha256_finalize(secp256k1_hmac_sha256_t *hash, unsign
     secp256k1_sha256_finalize(&hash->outer, out32);
 }
 
-
+__stack_hungry__
 static void secp256k1_rfc6979_hmac_sha256_initialize(secp256k1_rfc6979_hmac_sha256_t *rng, const unsigned char *key, size_t keylen) {
     secp256k1_hmac_sha256_t hmac;
     static const unsigned char zero[1] = {0x00};
@@ -232,6 +236,7 @@ static void secp256k1_rfc6979_hmac_sha256_initialize(secp256k1_rfc6979_hmac_sha2
     rng->retry = 0;
 }
 
+__stack_hungry__
 static void secp256k1_rfc6979_hmac_sha256_generate(secp256k1_rfc6979_hmac_sha256_t *rng, unsigned char *out, size_t outlen) {
     /* RFC6979 3.2.h. */
     static const unsigned char zero[1] = {0x00};
