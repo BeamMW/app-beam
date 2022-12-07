@@ -25,6 +25,7 @@
 #endif
 
 #ifndef USE_NUM_NONE
+__stack_hungry__
 static void secp256k1_scalar_get_num(secp256k1_num *r, const secp256k1_scalar *a) {
     unsigned char c[32];
     secp256k1_scalar_get_b32(c, a);
@@ -52,6 +53,7 @@ static void secp256k1_scalar_order_get_num(secp256k1_num *r) {
 }
 #endif
 
+__stack_hungry__
 static void secp256k1_scalar_inverse(secp256k1_scalar *r, const secp256k1_scalar *x) {
 #if defined(EXHAUSTIVE_TEST_ORDER)
     int i;
@@ -259,6 +261,7 @@ SECP256K1_INLINE static int secp256k1_scalar_is_even(const secp256k1_scalar *a) 
 }
 #endif
 
+__stack_hungry__
 static void secp256k1_scalar_inverse_var(secp256k1_scalar *r, const secp256k1_scalar *x) {
 #if defined(USE_SCALAR_INV_BUILTIN)
     secp256k1_scalar_inverse(r, x);
@@ -331,6 +334,7 @@ static void secp256k1_scalar_split_lambda(secp256k1_scalar *r1, secp256k1_scalar
  * The function below splits a in r1 and r2, such that r1 + lambda * r2 == a (mod order).
  */
 
+__stack_hungry__
 static void secp256k1_scalar_split_lambda(secp256k1_scalar *r1, secp256k1_scalar *r2, const secp256k1_scalar *a) {
     secp256k1_scalar c1, c2;
     static const secp256k1_scalar minus_lambda = SECP256K1_SCALAR_CONST(

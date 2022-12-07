@@ -40,6 +40,7 @@ static void secp256k1_fe_verify(const secp256k1_fe *a) {
 }
 #endif
 
+__stack_hungry__
 static void secp256k1_fe_normalize(secp256k1_fe *r) {
     uint32_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4],
              t5 = r->n[5], t6 = r->n[6], t7 = r->n[7], t8 = r->n[8], t9 = r->n[9];
@@ -95,6 +96,7 @@ static void secp256k1_fe_normalize(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static void secp256k1_fe_normalize_weak(secp256k1_fe *r) {
     uint32_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4],
              t5 = r->n[5], t6 = r->n[6], t7 = r->n[7], t8 = r->n[8], t9 = r->n[9];
@@ -126,6 +128,7 @@ static void secp256k1_fe_normalize_weak(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static void secp256k1_fe_normalize_var(secp256k1_fe *r) {
     uint32_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4],
              t5 = r->n[5], t6 = r->n[6], t7 = r->n[7], t8 = r->n[8], t9 = r->n[9];
@@ -182,6 +185,7 @@ static void secp256k1_fe_normalize_var(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static int secp256k1_fe_normalizes_to_zero(secp256k1_fe *r) {
     uint32_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4],
              t5 = r->n[5], t6 = r->n[6], t7 = r->n[7], t8 = r->n[8], t9 = r->n[9];
@@ -211,6 +215,7 @@ static int secp256k1_fe_normalizes_to_zero(secp256k1_fe *r) {
     return (z0 == 0) | (z1 == 0x3FFFFFFUL);
 }
 
+__stack_hungry__
 static int secp256k1_fe_normalizes_to_zero_var(secp256k1_fe *r) {
     uint32_t t0, t1, t2, t3, t4, t5, t6, t7, t8, t9;
     uint32_t z0, z1;
@@ -320,6 +325,7 @@ static int secp256k1_fe_cmp_var(const secp256k1_fe *a, const secp256k1_fe *b) {
     return 0;
 }
 
+__stack_hungry__
 static int secp256k1_fe_set_b32(secp256k1_fe *r, const unsigned char *a) {
     int i;
     r->n[0] = r->n[1] = r->n[2] = r->n[3] = r->n[4] = 0;
@@ -344,6 +350,7 @@ static int secp256k1_fe_set_b32(secp256k1_fe *r, const unsigned char *a) {
 }
 
 /** Convert a field element to a 32-byte big endian value. Requires the input to be normalized */
+__stack_hungry__
 static void secp256k1_fe_get_b32(unsigned char *r, const secp256k1_fe *a) {
     int i;
 #ifdef VERIFY
@@ -437,6 +444,7 @@ void secp256k1_fe_sqr_inner(uint32_t *r, const uint32_t *a);
 #define VERIFY_BITS(x, n) do { } while(0)
 #endif
 
+__stack_hungry__
 SECP256K1_INLINE static void secp256k1_fe_mul_inner(uint32_t *r, const uint32_t *a, const uint32_t * SECP256K1_RESTRICT b) {
     uint64_t c, d;
     uint64_t u0, u1, u2, u3, u4, u5, u6, u7, u8;
@@ -766,6 +774,7 @@ SECP256K1_INLINE static void secp256k1_fe_mul_inner(uint32_t *r, const uint32_t 
     /* [r9 r8 r7 r6 r5 r4 r3 r2 r1 r0] = [p18 p17 p16 p15 p14 p13 p12 p11 p10 p9 p8 p7 p6 p5 p4 p3 p2 p1 p0] */
 }
 
+__stack_hungry__
 SECP256K1_INLINE static void secp256k1_fe_sqr_inner(uint32_t *r, const uint32_t *a) {
     uint64_t c, d;
     uint64_t u0, u1, u2, u3, u4, u5, u6, u7, u8;

@@ -21,6 +21,7 @@
 #error "Please select field implementation"
 #endif
 
+__stack_hungry__
 SECP256K1_INLINE static int secp256k1_fe_equal(const secp256k1_fe *a, const secp256k1_fe *b) {
     secp256k1_fe na;
     secp256k1_fe_negate(&na, a, 1);
@@ -28,6 +29,7 @@ SECP256K1_INLINE static int secp256k1_fe_equal(const secp256k1_fe *a, const secp
     return secp256k1_fe_normalizes_to_zero(&na);
 }
 
+__stack_hungry__
 SECP256K1_INLINE static int secp256k1_fe_equal_var(const secp256k1_fe *a, const secp256k1_fe *b) {
     secp256k1_fe na;
     secp256k1_fe_negate(&na, a, 1);
@@ -35,6 +37,7 @@ SECP256K1_INLINE static int secp256k1_fe_equal_var(const secp256k1_fe *a, const 
     return secp256k1_fe_normalizes_to_zero_var(&na);
 }
 
+__stack_hungry__
 static int secp256k1_fe_sqrt(secp256k1_fe *r, const secp256k1_fe *a) {
     /** Given that p is congruent to 3 mod 4, we can compute the square root of
      *  a mod p as the (p+1)/4'th power of a.
@@ -133,6 +136,7 @@ static int secp256k1_fe_sqrt(secp256k1_fe *r, const secp256k1_fe *a) {
     return secp256k1_fe_equal(&t1, a);
 }
 
+__stack_hungry__
 static void secp256k1_fe_inv(secp256k1_fe *r, const secp256k1_fe *a) {
     secp256k1_fe x2, x3, x6, x9, x11, x22, x44, x88, x176, x220, x223, t1;
     int j;
@@ -223,6 +227,7 @@ static void secp256k1_fe_inv(secp256k1_fe *r, const secp256k1_fe *a) {
     secp256k1_fe_mul(r, a, &t1);
 }
 
+__stack_hungry__
 static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a) {
 #if defined(USE_FIELD_INV_BUILTIN)
     secp256k1_fe_inv(r, a);
@@ -260,6 +265,7 @@ static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a) {
 #endif
 }
 
+__stack_hungry__
 static void secp256k1_fe_inv_all_var(secp256k1_fe *r, const secp256k1_fe *a, size_t len) {
     secp256k1_fe u;
     size_t i;
@@ -287,6 +293,7 @@ static void secp256k1_fe_inv_all_var(secp256k1_fe *r, const secp256k1_fe *a, siz
     r[0] = u;
 }
 
+__stack_hungry__
 static int secp256k1_fe_is_quad_var(const secp256k1_fe *a) {
 #ifndef USE_NUM_NONE
     unsigned char b[32];

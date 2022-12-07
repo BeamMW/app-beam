@@ -30,6 +30,12 @@
 #	pragma warning (disable: 4706 4701) // assignment within conditional expression
 #endif
 
+#if 1
+#	define __stack_hungry__ __attribute__((noinline))
+#else
+#	define __stack_hungry__
+#endif
+
 
 #include "secp256k1/src/group_impl.h"
 #include "secp256k1/src/scalar_impl.h"
@@ -56,8 +62,6 @@ typedef uint32_t secp256k1_scalar_uint;
 #endif
 
 #define secp256k1_scalar_WordBits (sizeof(secp256k1_scalar_uint) * 8)
-
-#define __stack_hungry__ __attribute__((noinline))
 
 //////////////////////////////
 // MultiMac
@@ -266,19 +270,8 @@ static void MultiMac_Calculate_Secure_Read(secp256k1_ge* pGe, const MultiMac_Sec
 			sizeof(ges) / sizeof(unsigned int));
 	}
 
-	secp256k1_ge_from_storage(pGe, &ges);
-}
-
-__stack_hungry__
-static void MultiMac_Calculate_Secure_AddWithDenom(const MultiMac_Context* p, const secp256k1_ge* pGe)
-{
-	secp256k1_gej_add_zinv_var(p->m_pRes, p->m_pRes, pGe, p->m_pZDenom);
-}
-
-__stack_hungry__
-static void MultiMac_Calculate_Secure_AddWithoutDenom(const MultiMac_Context* p, const secp256k1_ge* pGe)
-{
-	secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, pGe, 0);
+	secp256k1_ge_from_storage(pGe, &ges); // inline is ok here
+	SECURE_ERASE_OBJ(ges);
 }
 
 __stack_hungry__
@@ -300,9 +293,9 @@ static void MultiMac_Calculate_SecureBit(const MultiMac_Context* p, unsigned int
 		MultiMac_Calculate_Secure_Read(&ge, pGen, iElement);
 
 		if (p->m_pZDenom)
-			MultiMac_Calculate_Secure_AddWithDenom(p, &ge);
+			secp256k1_gej_add_zinv_var(p->m_pRes, p->m_pRes, &ge, p->m_pZDenom);
 		else
-			MultiMac_Calculate_Secure_AddWithoutDenom(p, &ge);
+			secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
 	}
 }
 
@@ -329,8 +322,6 @@ static void MultiMac_Calculate_FastBit(const MultiMac_Context* p, unsigned int i
 		}
 
 		secp256k1_ge ge;
-		secp256k1_ge_storage ges;
-
 		secp256k1_ge_from_storage(&ge, p->m_pGenFast[i].m_pPt + iElem);
 
 		if (bNegate)
@@ -343,7 +334,7 @@ static void MultiMac_Calculate_FastBit(const MultiMac_Context* p, unsigned int i
 }
 
 __stack_hungry__
-void MultiMac_Calculate_PostPhase(const MultiMac_Context* p)
+static void MultiMac_Calculate_PostPhase(const MultiMac_Context* p)
 {
 	if (p->m_pZDenom)
 		// fix denominator

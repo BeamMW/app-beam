@@ -71,6 +71,7 @@ static const secp256k1_ge secp256k1_ge_const_g = SECP256K1_GE_CONST(
 static const int CURVE_B = 7;
 #endif
 
+__stack_hungry__
 static void secp256k1_ge_set_gej_zinv(secp256k1_ge *r, const secp256k1_gej *a, const secp256k1_fe *zi) {
     secp256k1_fe zi2;
     secp256k1_fe zi3;
@@ -97,6 +98,7 @@ static void secp256k1_ge_neg(secp256k1_ge *r, const secp256k1_ge *a) {
     secp256k1_fe_negate(&r->y, &r->y, 1);
 }
 
+__stack_hungry__
 static void secp256k1_ge_set_gej(secp256k1_ge *r, secp256k1_gej *a) {
     secp256k1_fe z2, z3;
     r->infinity = a->infinity;
@@ -110,6 +112,7 @@ static void secp256k1_ge_set_gej(secp256k1_ge *r, secp256k1_gej *a) {
     r->y = a->y;
 }
 
+__stack_hungry__
 static void secp256k1_ge_set_gej_var(secp256k1_ge *r, secp256k1_gej *a) {
     secp256k1_fe z2, z3;
     r->infinity = a->infinity;
@@ -126,6 +129,7 @@ static void secp256k1_ge_set_gej_var(secp256k1_ge *r, secp256k1_gej *a) {
     r->y = a->y;
 }
 
+__stack_hungry__
 static void secp256k1_ge_set_all_gej_var(secp256k1_ge *r, const secp256k1_gej *a, size_t len, const secp256k1_callback *cb) {
     secp256k1_fe *az;
     secp256k1_fe *azi;
@@ -152,6 +156,7 @@ static void secp256k1_ge_set_all_gej_var(secp256k1_ge *r, const secp256k1_gej *a
     free(azi);
 }
 
+__stack_hungry__
 static void secp256k1_ge_set_table_gej_var(secp256k1_ge *r, const secp256k1_gej *a, const secp256k1_fe *zr, size_t len) {
     size_t i = len - 1;
     secp256k1_fe zi;
@@ -170,6 +175,7 @@ static void secp256k1_ge_set_table_gej_var(secp256k1_ge *r, const secp256k1_gej 
     }
 }
 
+__stack_hungry__
 static void secp256k1_ge_globalz_set_table_gej(size_t len, secp256k1_ge *r, secp256k1_fe *globalz, const secp256k1_gej *a, const secp256k1_fe *zr) {
     size_t i = len - 1;
     secp256k1_fe zs;
@@ -213,6 +219,7 @@ static void secp256k1_ge_clear(secp256k1_ge *r) {
     secp256k1_fe_clear(&r->y);
 }
 
+__stack_hungry__
 static int secp256k1_ge_set_xquad(secp256k1_ge *r, const secp256k1_fe *x) {
     secp256k1_fe x2, x3, c;
     r->x = *x;
@@ -243,6 +250,7 @@ static void secp256k1_gej_set_ge(secp256k1_gej *r, const secp256k1_ge *a) {
    secp256k1_fe_set_int(&r->z, 1);
 }
 
+__stack_hungry__
 static int secp256k1_gej_eq_x_var(const secp256k1_fe *x, const secp256k1_gej *a) {
     secp256k1_fe r, r2;
     VERIFY_CHECK(!a->infinity);
@@ -264,6 +272,7 @@ static int secp256k1_gej_is_infinity(const secp256k1_gej *a) {
     return a->infinity;
 }
 
+__stack_hungry__
 static int secp256k1_gej_is_valid_var(const secp256k1_gej *a) {
     secp256k1_fe y2, x3, z2, z6;
     if (a->infinity) {
@@ -284,6 +293,7 @@ static int secp256k1_gej_is_valid_var(const secp256k1_gej *a) {
     return secp256k1_fe_equal_var(&y2, &x3);
 }
 
+__stack_hungry__
 static int secp256k1_ge_is_valid_var(const secp256k1_ge *a) {
     secp256k1_fe y2, x3, c;
     if (a->infinity) {
@@ -298,6 +308,7 @@ static int secp256k1_ge_is_valid_var(const secp256k1_ge *a) {
     return secp256k1_fe_equal_var(&y2, &x3);
 }
 
+__stack_hungry__
 static void secp256k1_gej_double_var(secp256k1_gej *r, const secp256k1_gej *a, secp256k1_fe *rzr) {
     /* Operations: 3 mul, 4 sqr, 0 normalize, 12 mul_int/add/negate.
      *
@@ -358,6 +369,7 @@ static SECP256K1_INLINE void secp256k1_gej_double_nonzero(secp256k1_gej *r, cons
     secp256k1_gej_double_var(r, a, rzr);
 }
 
+__stack_hungry__
 static void secp256k1_gej_add_var(secp256k1_gej *r, const secp256k1_gej *a, const secp256k1_gej *b, secp256k1_fe *rzr) {
     /* Operations: 12 mul, 4 sqr, 2 normalize, 12 mul_int/add/negate */
     secp256k1_fe z22, z12, u1, u2, s1, s2, h, i, i2, h2, h3, t;
@@ -411,6 +423,7 @@ static void secp256k1_gej_add_var(secp256k1_gej *r, const secp256k1_gej *a, cons
     secp256k1_fe_add(&r->y, &h3);
 }
 
+__stack_hungry__
 static void secp256k1_gej_add_ge_var(secp256k1_gej *r, const secp256k1_gej *a, const secp256k1_ge *b, secp256k1_fe *rzr) {
     /* 8 mul, 3 sqr, 4 normalize, 12 mul_int/add/negate */
     secp256k1_fe z12, u1, u2, s1, s2, h, i, i2, h2, h3, t;
@@ -460,6 +473,7 @@ static void secp256k1_gej_add_ge_var(secp256k1_gej *r, const secp256k1_gej *a, c
     secp256k1_fe_add(&r->y, &h3);
 }
 
+__stack_hungry__
 static void secp256k1_gej_add_zinv_var(secp256k1_gej *r, const secp256k1_gej *a, const secp256k1_ge *b, const secp256k1_fe *bzinv) {
     /* 9 mul, 3 sqr, 4 normalize, 12 mul_int/add/negate */
     secp256k1_fe az, z12, u1, u2, s1, s2, h, i, i2, h2, h3, t;
@@ -516,7 +530,7 @@ static void secp256k1_gej_add_zinv_var(secp256k1_gej *r, const secp256k1_gej *a,
     secp256k1_fe_add(&r->y, &h3);
 }
 
-
+__stack_hungry__
 static void secp256k1_gej_add_ge(secp256k1_gej *r, const secp256k1_gej *a, const secp256k1_ge *b) {
     /* Operations: 7 mul, 5 sqr, 4 normalize, 21 mul_int/add/negate/cmov */
     static const secp256k1_fe fe_1 = SECP256K1_FE_CONST(0, 0, 0, 0, 0, 0, 0, 1);
@@ -639,6 +653,7 @@ static void secp256k1_gej_add_ge(secp256k1_gej *r, const secp256k1_gej *a, const
     r->infinity = infinity;
 }
 
+__stack_hungry__
 static void secp256k1_gej_rescale(secp256k1_gej *r, const secp256k1_fe *s) {
     /* Operations: 4 mul, 1 sqr */
     secp256k1_fe zz;
@@ -650,6 +665,7 @@ static void secp256k1_gej_rescale(secp256k1_gej *r, const secp256k1_fe *s) {
     secp256k1_fe_mul(&r->z, &r->z, s);                  /* r->z *= s   */
 }
 
+__stack_hungry__
 static void secp256k1_ge_to_storage(secp256k1_ge_storage *r, const secp256k1_ge *a) {
     secp256k1_fe x, y;
     VERIFY_CHECK(!a->infinity);
@@ -683,6 +699,8 @@ static void secp256k1_ge_mul_lambda(secp256k1_ge *r, const secp256k1_ge *a) {
 }
 #endif
 
+
+__stack_hungry__
 static int secp256k1_gej_has_quad_y_var(const secp256k1_gej *a) {
     secp256k1_fe yz;
 

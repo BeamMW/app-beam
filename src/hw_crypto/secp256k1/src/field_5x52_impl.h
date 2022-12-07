@@ -51,6 +51,7 @@ static void secp256k1_fe_verify(const secp256k1_fe *a) {
 }
 #endif
 
+__stack_hungry__
 static void secp256k1_fe_normalize(secp256k1_fe *r) {
     uint64_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4];
 
@@ -94,6 +95,7 @@ static void secp256k1_fe_normalize(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static void secp256k1_fe_normalize_weak(secp256k1_fe *r) {
     uint64_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4];
 
@@ -118,6 +120,7 @@ static void secp256k1_fe_normalize_weak(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static void secp256k1_fe_normalize_var(secp256k1_fe *r) {
     uint64_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4];
 
@@ -162,6 +165,7 @@ static void secp256k1_fe_normalize_var(secp256k1_fe *r) {
 #endif
 }
 
+__stack_hungry__
 static int secp256k1_fe_normalizes_to_zero(secp256k1_fe *r) {
     uint64_t t0 = r->n[0], t1 = r->n[1], t2 = r->n[2], t3 = r->n[3], t4 = r->n[4];
 
@@ -185,6 +189,7 @@ static int secp256k1_fe_normalizes_to_zero(secp256k1_fe *r) {
     return (z0 == 0) | (z1 == 0xFFFFFFFFFFFFFULL);
 }
 
+__stack_hungry__
 static int secp256k1_fe_normalizes_to_zero_var(secp256k1_fe *r) {
     uint64_t t0, t1, t2, t3, t4;
     uint64_t z0, z1;
@@ -283,6 +288,7 @@ static int secp256k1_fe_cmp_var(const secp256k1_fe *a, const secp256k1_fe *b) {
     return 0;
 }
 
+__stack_hungry__
 static int secp256k1_fe_set_b32(secp256k1_fe *r, const unsigned char *a) {
     int i;
     r->n[0] = r->n[1] = r->n[2] = r->n[3] = r->n[4] = 0;
@@ -306,6 +312,7 @@ static int secp256k1_fe_set_b32(secp256k1_fe *r, const unsigned char *a) {
 }
 
 /** Convert a field element to a 32-byte big endian value. Requires the input to be normalized */
+__stack_hungry__
 static void secp256k1_fe_get_b32(unsigned char *r, const secp256k1_fe *a) {
     int i;
 #ifdef VERIFY
