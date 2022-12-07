@@ -57,6 +57,8 @@ typedef uint32_t secp256k1_scalar_uint;
 
 #define secp256k1_scalar_WordBits (sizeof(secp256k1_scalar_uint) * 8)
 
+#define __stack_hungry__ __attribute__((noinline))
+
 //////////////////////////////
 // MultiMac
 typedef struct
@@ -227,12 +229,11 @@ void mem_cmov(unsigned int* pDst, const unsigned int* pSrc, int flag, unsigned i
 		pDst[n] = (pDst[n] & mask0) | (pSrc[n] & mask1);
 }
 
-void MultiMac_Calculate(const MultiMac_Context* p)
+__stack_hungry__
+static void MultiMac_Calculate_PrePhase(const MultiMac_Context* p)
 {
-	secp256k1_gej_set_infinity(p->m_pRes);
-
 	secp256k1_ge ge;
-	secp256k1_ge_storage ges;
+	secp256k1_gej_set_infinity(p->m_pRes);
 
 	for (unsigned int i = 0; i < p->m_Fast; i++)
 	{
@@ -246,87 +247,134 @@ void MultiMac_Calculate(const MultiMac_Context* p)
 			secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
 		}
 	}
+}
 
+__stack_hungry__
+static void MultiMac_Calculate_Secure_Read(secp256k1_ge* pGe, const MultiMac_Secure* pGen, unsigned int iElement)
+{
+	secp256k1_ge_storage ges;
 
-	for (unsigned int iBit = c_ECC_nBits; iBit--; )
+	for (unsigned int j = 0; j < c_MultiMac_Secure_nCount; j++)
 	{
-		secp256k1_gej_double_var(p->m_pRes, p->m_pRes, 0); // would be fast if zero, no need to check explicitly
+		static_assert(sizeof(ges) == sizeof(pGen->m_pPt[j]), "");
+		static_assert(!(sizeof(ges) % sizeof(unsigned int)), "");
 
-		if (!(iBit % c_MultiMac_Secure_nBits) && p->m_Secure)
-		{
-			static_assert(!(secp256k1_scalar_WordBits % c_MultiMac_Secure_nBits), "");
-
-			unsigned int iWord = iBit / secp256k1_scalar_WordBits;
-			unsigned int nShift = iBit % secp256k1_scalar_WordBits;
-			const secp256k1_scalar_uint nMsk = ((1U << c_MultiMac_Secure_nBits) - 1);
-
-			for (unsigned int i = 0; i < p->m_Secure; i++)
-			{
-				unsigned int iElement = (p->m_pSecureK[i].d[iWord] >> nShift) & nMsk;
-				const MultiMac_Secure* pGen = p->m_pGenSecure + i;
-
-				for (unsigned int j = 0; j < c_MultiMac_Secure_nCount; j++)
-				{
-					static_assert(sizeof(ges) == sizeof(pGen->m_pPt[j]), "");
-					static_assert(!(sizeof(ges) % sizeof(unsigned int)), "");
-
-					mem_cmov(
-						(unsigned int*) &ges,
-						(unsigned int*) (pGen->m_pPt + j),
-						iElement == j,
-						sizeof(ges) / sizeof(unsigned int));
-				}
-
-				secp256k1_ge_from_storage(&ge, &ges);
-
-				if (p->m_pZDenom)
-					secp256k1_gej_add_zinv_var(p->m_pRes, p->m_pRes, &ge, p->m_pZDenom);
-				else
-					secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
-			}
-		}
-
-		for (unsigned int i = 0; i < p->m_Fast; i++)
-		{
-			MultiMac_WNaf* pWnaf = p->m_pWnaf + i;
-
-			if (((uint8_t) iBit) != pWnaf->m_iBit)
-				continue;
-
-			unsigned int iElem = pWnaf->m_iElement;
-
-			if (c_WNaf_Invalid == iElem)
-				continue;
-
-			int bNegate = (iElem >= c_MultiMac_Fast_nCount);
-			if (bNegate)
-			{
-				iElem = (c_MultiMac_Fast_nCount * 2 - 1) - iElem;
-				assert(iElem < c_MultiMac_Fast_nCount);
-			}
-
-			secp256k1_ge_from_storage(&ge, p->m_pGenFast[i].m_pPt + iElem);
-
-			if (bNegate)
-				secp256k1_ge_neg(&ge, &ge);
-
-			secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
-
-			WNaf_Cursor_MoveNext(pWnaf, p->m_pFastK + i);
-		}
+		mem_cmov(
+			(unsigned int*) &ges,
+			(unsigned int*)(pGen->m_pPt + j),
+			iElement == j,
+			sizeof(ges) / sizeof(unsigned int));
 	}
 
-	SECURE_ERASE_OBJ(ges);
+	secp256k1_ge_from_storage(pGe, &ges);
+}
 
+__stack_hungry__
+static void MultiMac_Calculate_Secure_AddWithDenom(const MultiMac_Context* p, const secp256k1_ge* pGe)
+{
+	secp256k1_gej_add_zinv_var(p->m_pRes, p->m_pRes, pGe, p->m_pZDenom);
+}
+
+__stack_hungry__
+static void MultiMac_Calculate_Secure_AddWithoutDenom(const MultiMac_Context* p, const secp256k1_ge* pGe)
+{
+	secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, pGe, 0);
+}
+
+__stack_hungry__
+static void MultiMac_Calculate_SecureBit(const MultiMac_Context* p, unsigned int iBit)
+{
+	secp256k1_ge ge;
+
+	static_assert(!(secp256k1_scalar_WordBits % c_MultiMac_Secure_nBits), "");
+
+	unsigned int iWord = iBit / secp256k1_scalar_WordBits;
+	unsigned int nShift = iBit % secp256k1_scalar_WordBits;
+	const secp256k1_scalar_uint nMsk = ((1U << c_MultiMac_Secure_nBits) - 1);
+
+	for (unsigned int i = 0; i < p->m_Secure; i++)
+	{
+		unsigned int iElement = (p->m_pSecureK[i].d[iWord] >> nShift) & nMsk;
+		const MultiMac_Secure* pGen = p->m_pGenSecure + i;
+
+		MultiMac_Calculate_Secure_Read(&ge, pGen, iElement);
+
+		if (p->m_pZDenom)
+			MultiMac_Calculate_Secure_AddWithDenom(p, &ge);
+		else
+			MultiMac_Calculate_Secure_AddWithoutDenom(p, &ge);
+	}
+}
+
+__stack_hungry__
+static void MultiMac_Calculate_FastBit(const MultiMac_Context* p, unsigned int iBit)
+{
+	for (unsigned int i = 0; i < p->m_Fast; i++)
+	{
+		MultiMac_WNaf* pWnaf = p->m_pWnaf + i;
+
+		if (((uint8_t)iBit) != pWnaf->m_iBit)
+			continue;
+
+		unsigned int iElem = pWnaf->m_iElement;
+
+		if (c_WNaf_Invalid == iElem)
+			continue;
+
+		int bNegate = (iElem >= c_MultiMac_Fast_nCount);
+		if (bNegate)
+		{
+			iElem = (c_MultiMac_Fast_nCount * 2 - 1) - iElem;
+			assert(iElem < c_MultiMac_Fast_nCount);
+		}
+
+		secp256k1_ge ge;
+		secp256k1_ge_storage ges;
+
+		secp256k1_ge_from_storage(&ge, p->m_pGenFast[i].m_pPt + iElem);
+
+		if (bNegate)
+			secp256k1_ge_neg(&ge, &ge);
+
+		secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
+
+		WNaf_Cursor_MoveNext(pWnaf, p->m_pFastK + i);
+	}
+}
+
+__stack_hungry__
+void MultiMac_Calculate_PostPhase(const MultiMac_Context* p)
+{
 	if (p->m_pZDenom)
 		// fix denominator
 		secp256k1_fe_mul(&p->m_pRes->z, &p->m_pRes->z, p->m_pZDenom);
 
 	for (unsigned int i = 0; i < p->m_Secure; i++)
 	{
+		secp256k1_ge ge;
 		secp256k1_ge_from_storage(&ge, p->m_pGenSecure[i].m_pPt + c_MultiMac_Secure_nCount);
 		secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
 	}
+
+}
+
+__stack_hungry__
+void MultiMac_Calculate(const MultiMac_Context* p)
+{
+	MultiMac_Calculate_PrePhase(p);
+
+	for (unsigned int iBit = c_ECC_nBits; iBit--; )
+	{
+		secp256k1_gej_double_var(p->m_pRes, p->m_pRes, 0); // would be fast if zero, no need to check explicitly
+
+		if (!(iBit % c_MultiMac_Secure_nBits) && p->m_Secure)
+			MultiMac_Calculate_SecureBit(p, iBit);
+
+
+		MultiMac_Calculate_FastBit(p, iBit);
+	}
+
+	MultiMac_Calculate_PostPhase(p);
 }
 
 //////////////////////////////
