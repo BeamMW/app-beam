@@ -27,10 +27,39 @@
 #include "sw.h"
 #include "ui/menu.h"
 
+#include "hw_crypto/keykeeper.h"
+#include "hw_crypto/multimac.h"
+#include "hw_crypto/rangeproof.h"
+
 uint8_t G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 ux_state_t G_ux;
 bolos_ux_params_t G_ux_params;
 global_ctx_t G_context;
+
+void SecureEraseMem(void* p, uint32_t n)
+{
+	explicit_bzero(p, n);
+}
+
+uint32_t KeyKeeper_getNumSlots()
+{
+	return 32;
+}
+
+void KeyKeeper_ReadSlot(uint32_t, UintBig*)
+{
+}
+
+void KeyKeeper_RegenerateSlot(uint32_t)
+{
+}
+
+int KeyKeeper_ConfirmSpend(Amount /*val*/, AssetID /*aid*/, const UintBig* /*pPeerID*/,
+	const TxKernelUser* /*pUser*/, const TxKernelData* /*pData*/, const UintBig* /*pKrnID*/)
+{
+	return c_KeyKeeper_Status_Ok;
+}
+
 
 
 int OnApduRcv(unsigned int rcvLen)
@@ -40,6 +69,33 @@ int OnApduRcv(unsigned int rcvLen)
     if (rcvLen < sizeof(command_t))
     {
         PRINTF("=> /!\\ too short\n");
+/*
+        {
+            secp256k1_scalar tauX;
+            memset(&tauX, 0, sizeof(tauX));
+
+            Kdf kdf;
+            Kdf_Init(&kdf, &tauX);
+
+            CompactPoint pT[2];
+
+            RangeProof rp;
+            memset(&rp, 0, sizeof(rp));
+            rp.m_Cid.m_Amount = 774440000;
+            rp.m_Cid.m_SubIdx = 45;
+            //rp.m_Cid.m_AssetID = 6;
+            rp.m_pKdf = &kdf;
+            rp.m_pT_In = pT;
+            rp.m_pT_Out = pT;
+
+            PRINTF("=> rp_ptr=%x\n", &rp);
+
+
+            int res = RangeProof_Calculate(&rp);
+            PRINTF("=> @ rp res=%d\n", res);
+        }
+*/
+
         return 0; // ignore
     }
 
@@ -131,14 +187,91 @@ int OnApduRcv(unsigned int rcvLen)
 /**
  * Handle APDU command received and send back APDU response using handlers.
  */
-void app_main() {
+
+#define STACK_MARK 0xfadebabe
+
+extern unsigned long _stack;
+
+void StackTestFunc()
+{
+    struct {
+        uint32_t myVal;
+        secp256k1_gej gej;
+        secp256k1_scalar s1, s2;
+        MultiMac_WNaf wnaf;
+        MultiMac_Context mmCtx;
+    } s;
+
+    // set
+    uint32_t* pMark = (uint32_t*) &_stack;
+    for (; ((uint32_t*) &s) - pMark > 20; pMark++)
+        (*pMark) = STACK_MARK;
+
+    // invoke
+    Context* pCtx = Context_get();
+
+    memset(&s.s1, 0xa5, sizeof(s.s1));
+    memset(&s.s2, 0x6c, sizeof(s.s2));
+
+    s.mmCtx.m_pRes = &s.gej;
+    s.mmCtx.m_Secure = 1;
+    s.mmCtx.m_pSecureK = &s.s1;
+    s.mmCtx.m_pGenSecure = pCtx->m_pGenGJ;
+    s.mmCtx.m_Fast = 1;
+    s.mmCtx.m_pFastK = &s.s2;
+    s.mmCtx.m_pWnaf = &s.wnaf;
+    s.mmCtx.m_pGenFast = pCtx->m_pGenFast + c_MultiMac_Fast_Idx_H;
+    s.mmCtx.m_pZDenom = 0;
+
+    MultiMac_Calculate(&s.mmCtx);
+
+    /*
+        Kdf kdf1, kdf2;
+        memset(&kdf1, 0, sizeof(kdf1));
+
+        Kdf_getChild(&kdf2, 14, &kdf1);
+    */
+
+    // check
+    pMark = (uint32_t*) &_stack;
+    for (; ((uint32_t*) &s) - pMark > 20; pMark++)
+        if ((*pMark) != STACK_MARK)
+            break;
+
+    PRINTF("Stack consumed: %u\n", (((uint32_t*) &s) - pMark) * sizeof(uint32_t));
+
+}
+
+void app_main()
+{
+
+	_stack = STACK_MARK;
+	
+    //StackTestFunc();
+
     io_init();
 
     // Reset context
     explicit_bzero(&G_context, sizeof(G_context));
 
+    PRINTF("apdu_ptr=%x\n", G_io_apdu_buffer);
+    PRINTF("apdu_len=%u\n", sizeof(G_io_apdu_buffer));
+    PRINTF("uxbuf_len=%u\n", sizeof(G_io_seproxyhal_spi_buffer));
+    PRINTF("gux_len=%u\n", sizeof(G_ux));
+    PRINTF("gux_params_len=%u\n", sizeof(G_ux_params));
+    PRINTF("G_context_len=%u\n", sizeof(G_context));
+	PRINTF("canary_ptr=%x\n", &_stack);
+
+	Context* pCtx = Context_get();
+    PRINTF("ec_context_ptr=%x\n", pCtx);
+
+    PRINTF("local_ptr=%x\n", &pCtx);
+
     for (;;) {
-        BEGIN_TRY {
+
+		PRINTF("Stack canary=%x\n", _stack);
+		
+        BEGIN_TRY{
             TRY {
 
                 // Receive command bytes in G_io_apdu_buffer
@@ -150,9 +283,6 @@ void app_main() {
                 }
 
                 PRINTF("=> Incoming command: %.*H\n", inpLen, G_io_apdu_buffer);
-
-				//for (uint32_t i = 0; i < sizeof(pBigBuf); i++)
-				//	pBigBuf[i] = G_io_apdu_buffer[0];
 
                 // Dispatch structured APDU command to handler
                 if (OnApduRcv(inpLen) < 0) {
