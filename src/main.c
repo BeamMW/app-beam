@@ -203,59 +203,77 @@ int OnApduRcv(unsigned int rcvLen)
 
 extern unsigned long _stack;
 
-void StackTestFunc()
+__attribute__((noinline))
+void StackMark()
 {
-    struct {
-//        secp256k1_gej gej;
-        secp256k1_scalar s1, s2;
-        MultiMac_WNaf wnaf;
-        MultiMac_Context mmCtx;
-        Kdf kdf1;
-        Kdf kdf2;
-        UintBig hv;
-    } s;
-
-    memset(&s.hv, 0, sizeof(s.hv));
-    Kdf_Init(&s.kdf1, &s.hv);
-
-
-    // set
     uint32_t* pMark = (uint32_t*) &_stack;
-    for (; ((uint32_t*) &s) - pMark > 20; pMark++)
+    for (; ((uint32_t*) &pMark) - pMark > 20; pMark++)
         (*pMark) = STACK_MARK;
+}
 
-    // invoke
-
-/*   
-    Context* pCtx = Context_get();
-
-    memset(&s.s1, 0xa5, sizeof(s.s1));
-    memset(&s.s2, 0x6c, sizeof(s.s2));
-
-    s.mmCtx.m_pRes = &s.gej;
-    s.mmCtx.m_Secure = 1;
-    s.mmCtx.m_pSecureK = &s.s1;
-    s.mmCtx.m_pGenSecure = pCtx->m_pGenGJ;
-    s.mmCtx.m_Fast = 1;
-    s.mmCtx.m_pFastK = &s.s2;
-    s.mmCtx.m_pWnaf = &s.wnaf;
-    s.mmCtx.m_pGenFast = pCtx->m_pGenFast + c_MultiMac_Fast_Idx_H;
-    s.mmCtx.m_pZDenom = 0;
-
-    MultiMac_Calculate(&s.mmCtx);
-*/
-
-
-    Kdf_getChild(&s.kdf2, 14, &s.kdf1);
-    //Kdf_Derive_PKey(&s.kdf1, &s.hv, &s.s1);
-
-    // check
-    pMark = (uint32_t*) &_stack;
-    for (; ((uint32_t*) &s) - pMark > 20; pMark++)
+__attribute__((noinline))
+void StackPrint(const void* p, const char* sz)
+{
+    uint32_t* pMark = (uint32_t*) &_stack;
+    for (; ; pMark++)
         if ((*pMark) != STACK_MARK)
             break;
 
-    PRINTF("Stack consumed: %u\n", (((uint32_t*) &s) - pMark) * sizeof(uint32_t));
+    PRINTF("@@ Op=%s, Stack consumed: %u\n", sz, (((uint32_t*) p) - pMark) * sizeof(uint32_t));
+}
+
+void StackTestFunc()
+{
+    union {
+
+        struct {
+            Kdf kdf1;
+            Kdf kdf2;
+            UintBig hv;
+        } p1;
+
+        struct {
+            secp256k1_scalar s1, s2;
+            MultiMac_WNaf wnaf;
+            MultiMac_Context mmCtx;
+            secp256k1_gej gej;
+        } p2;
+
+    } u;
+
+
+    PRINTF("@@ Stack available: %u\n", ((uint8_t*) &u) - ((uint8_t*) &_stack));
+
+    StackMark();
+
+    memset(&u.p1.hv, 0, sizeof(u.p1.hv));
+    Kdf_Init(&u.p1.kdf1, &u.p1.hv);
+
+    StackPrint(&u, "Kdf_Init");
+    StackMark();
+
+    Kdf_getChild(&u.p1.kdf2, 14, &u.p1.kdf1);
+
+    StackPrint(&u, "Kdf_getChild");
+    StackMark();
+
+    memset(&u.p2.s1, 0xa5, sizeof(u.p2.s1));
+    memset(&u.p2.s2, 0x6c, sizeof(u.p2.s2));
+    memset(&u.p2.mmCtx, 0, sizeof(u.p2.mmCtx));
+
+    u.p2.mmCtx.m_pRes = &u.p2.gej;
+    u.p2.mmCtx.m_Secure = 1;
+    u.p2.mmCtx.m_pSecureK = &u.p2.s1;
+    u.p2.mmCtx.m_pGenSecure = Context_get()->m_pGenGJ;
+    u.p2.mmCtx.m_Fast = 1;
+    u.p2.mmCtx.m_pFastK = &u.p2.s2;
+    u.p2.mmCtx.m_pWnaf = &u.p2.wnaf;
+    u.p2.mmCtx.m_pGenFast = Context_get()->m_pGenFast + c_MultiMac_Fast_Idx_H;
+    u.p2.mmCtx.m_pZDenom = 0;
+
+    MultiMac_Calculate(&u.p2.mmCtx);
+
+    StackPrint(&u, "MultiMac_Calculate");
 
 }
 
@@ -264,7 +282,7 @@ void app_main()
 
 	_stack = STACK_MARK;
 	
-    //StackTestFunc();
+    StackTestFunc();
 
     io_init();
 
