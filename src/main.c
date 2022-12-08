@@ -243,11 +243,13 @@ void StackTestFunc()
             Kdf kdf;
             CoinID cid;
             secp256k1_scalar s;
+            FlexPoint fp;
         } p3;
     } u;
 
 
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &u) - ((uint8_t*) &_stack));
+    PRINTF("@@ FastGen size = %u\n", sizeof(MultiMac_Fast));
 
     StackMark();
 
@@ -295,6 +297,12 @@ void StackTestFunc()
 
     StackPrint(&u, "CoinID_getSk without aid");
 
+    StackMark();
+
+    void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, AssetID aid, FlexPoint* pComm);
+    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.fp);
+
+    StackPrint(&u, "CoinID_getCommRaw without aid");
 }
 
 void app_main()
