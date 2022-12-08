@@ -239,6 +239,11 @@ void StackTestFunc()
             secp256k1_gej gej;
         } p2;
 
+        struct {
+            Kdf kdf;
+            CoinID cid;
+            secp256k1_scalar s;
+        } p3;
     } u;
 
 
@@ -274,6 +279,21 @@ void StackTestFunc()
     MultiMac_Calculate(&u.p2.mmCtx);
 
     StackPrint(&u, "MultiMac_Calculate");
+
+    Kdf_Init(&u.p3.kdf, &u.p1.hv); // don't care if p1.hv contains garbage
+
+    memset(&u.p3.cid, 0, sizeof(u.p3.cid));
+    u.p3.cid.m_Idx = 15;
+    u.p3.cid.m_Type = 0x22;
+    u.p3.cid.m_SubIdx = 8;
+    u.p3.cid.m_Amount = 4500000000ull;
+    u.p3.cid.m_AssetID = 0;
+
+    StackMark();
+
+    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
+
+    StackPrint(&u, "CoinID_getSk without aid");
 
 }
 
