@@ -246,6 +246,19 @@ void StackTestFunc()
             CompactPoint pt;
             secp256k1_gej gej;
         } p3;
+
+        struct {
+            secp256k1_ge ge;
+            secp256k1_gej gej;
+            MultiMac_Fast aGen;
+        } p4;
+/*
+        struct {
+            Kdf kdf;
+            secp256k1_scalar tauX;
+            CompactPoint pT[2];
+            RangeProof rp;
+        } p4;*/
     } u;
 
 
@@ -283,6 +296,18 @@ void StackTestFunc()
 
     StackPrint(&u, "MultiMac_Calculate");
 
+    StackMark();
+    void CoinID_GetAssetGen(AssetID aid, secp256k1_ge* pGe);
+    CoinID_GetAssetGen(18, &u.p4.ge);
+    StackPrint(&u, "CoinID_GetAssetGen");
+
+    Point_Gej_from_Ge(&u.p4.gej, &u.p4.ge);
+
+    StackMark();
+    MultiMac_Fast_Init(&u.p4.aGen, &u.p4.ge, &u.p4.gej);
+    StackPrint(&u, "MultiMac_Fast_Init");
+
+
     Kdf_Init(&u.p3.kdf, &u.p1.hv); // don't care if p1.hv contains garbage
 
     memset(&u.p3.cid, 0, sizeof(u.p3.cid));
@@ -293,17 +318,24 @@ void StackTestFunc()
     u.p3.cid.m_AssetID = 0;
 
     StackMark();
-
-    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
-
-    StackPrint(&u, "CoinID_getSk without aid");
-
-    StackMark();
-
     void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, AssetID aid, secp256k1_gej* pGej);
     CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.gej);
-
     StackPrint(&u, "CoinID_getCommRaw without aid");
+
+    StackMark();
+    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
+    StackPrint(&u, "CoinID_getSk without aid");
+
+
+    u.p3.cid.m_AssetID = 18;
+
+    StackMark();
+    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.gej);
+    StackPrint(&u, "CoinID_getCommRaw with aid");
+
+    StackMark();
+    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
+    StackPrint(&u, "CoinID_getSk with aid");
 }
 
 void app_main()

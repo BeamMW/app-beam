@@ -463,11 +463,14 @@ void Point_Gej_2_Normalize(secp256k1_gej* pGej)
 }
 
 __stack_hungry__
-static void MultiMac_Fast_Init(MultiMac_Fast* pFast, secp256k1_fe* pZDenom, const secp256k1_gej* pGej)
+void MultiMac_Fast_Init(MultiMac_Fast* pFast, secp256k1_fe* pZDenom, const secp256k1_gej* pGej)
 {
 	assert(!secp256k1_gej_is_infinity(pGej));
 
 	secp256k1_gej pOdds[c_MultiMac_Fast_nCount];
+
+	static_assert(sizeof(MultiMac_Fast) >= sizeof(pOdds), "");
+
 	pOdds[0] = *pGej;
 
 	// calculate odd powers
@@ -956,7 +959,7 @@ void Kdf_getChild(Kdf* p, uint32_t iChild, const Kdf* pParent)
 //////////////////////////////
 // Kdf - CoinID key derivation
 __stack_hungry__
-static void CoinID_GetAssetGen(AssetID aid, secp256k1_gej* pGej)
+void CoinID_GetAssetGen(AssetID aid, secp256k1_ge* pGe)
 {
 	assert(aid);
 
@@ -967,17 +970,16 @@ static void CoinID_GetAssetGen(AssetID aid, secp256k1_gej* pGej)
 	secp256k1_sha256_write_Num(&oracle.m_sha, aid);
 
 	CompactPoint pt;
-	secp256k1_ge ge;
-
-	Oracle_NextPoint(&oracle, &pt, &ge);
-
-	Point_Gej_from_Ge(pGej, &ge);
+	Oracle_NextPoint(&oracle, &pt, pGe);
 }
 
 __stack_hungry__
 void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, AssetID aid, secp256k1_gej* pGej)
 {
-	MultiMac_Fast aGen; // very large
+	union {
+		MultiMac_Fast aGen; // very large
+		secp256k1_ge ge;
+	} u;
 	secp256k1_fe zDenom;
 
 	MultiMac_WNaf wnaf;
@@ -995,10 +997,12 @@ void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, Ass
 
 	if (aid)
 	{
-		CoinID_GetAssetGen(aid, pGej);
-		MultiMac_Fast_Init(&aGen, &zDenom, pGej);
+		CoinID_GetAssetGen(aid, &u.ge);
+		Point_Gej_from_Ge(pGej, &u.ge);
 
-		mmCtx.m_pGenFast = &aGen;
+		MultiMac_Fast_Init(&u.aGen, &zDenom, pGej);
+
+		mmCtx.m_pGenFast = &u.aGen;
 		mmCtx.m_pZDenom = &zDenom;
 	}
 	else
@@ -1995,6 +1999,8 @@ int KeyKeeper_Invoke(const KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t
 
 PROTO_METHOD(Version)
 {
+	UNUSED(p);
+
 	if (nIn || nOut)
 		return c_KeyKeeper_Status_ProtoError; // size mismatch
 
@@ -2004,6 +2010,8 @@ PROTO_METHOD(Version)
 
 PROTO_METHOD(GetNumSlots)
 {
+	UNUSED(p);
+
 	if (nIn || nOut)
 		return c_KeyKeeper_Status_ProtoError; // size mismatch
 
