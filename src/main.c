@@ -243,15 +243,15 @@ void StackTestFunc()
             Kdf kdf;
             CoinID cid;
             secp256k1_scalar s;
-            CompactPoint pt;
             secp256k1_gej gej;
+
+            struct {
+                MultiMac_Fast_Custom aGen;
+                secp256k1_fe zDenom;
+            } aGen;
+
         } p3;
 
-        struct {
-            secp256k1_ge ge;
-            secp256k1_gej gej;
-            MultiMac_Fast aGen;
-        } p4;
 /*
         struct {
             Kdf kdf;
@@ -263,7 +263,7 @@ void StackTestFunc()
 
 
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &u) - ((uint8_t*) &_stack));
-    PRINTF("@@ FastGen size = %u\n", sizeof(MultiMac_Fast));
+    PRINTF("@@ FastGen-custom size = %u\n", sizeof(u.p3.aGen));
 
     StackMark();
 
@@ -289,23 +289,18 @@ void StackTestFunc()
     u.p2.mmCtx.m_Fast = 1;
     u.p2.mmCtx.m_pFastK = &u.p2.s2;
     u.p2.mmCtx.m_pWnaf = &u.p2.wnaf;
-    u.p2.mmCtx.m_pGenFast = Context_get()->m_pGenFast + c_MultiMac_Fast_Idx_H;
+    u.p2.mmCtx.m_FastGen.m_pPrecomputed = Context_get()->m_pGenFast + c_MultiMac_Fast_Idx_H;
     u.p2.mmCtx.m_pZDenom = 0;
 
     MultiMac_Calculate(&u.p2.mmCtx);
 
     StackPrint(&u, "MultiMac_Calculate");
 
-    StackMark();
-    void CoinID_GetAssetGen(AssetID aid, secp256k1_ge* pGe);
-    CoinID_GetAssetGen(18, &u.p4.ge);
-    StackPrint(&u, "CoinID_GetAssetGen");
-
-    Point_Gej_from_Ge(&u.p4.gej, &u.p4.ge);
 
     StackMark();
-    MultiMac_Fast_Init(&u.p4.aGen, &u.p4.ge, &u.p4.gej);
-    StackPrint(&u, "MultiMac_Fast_Init");
+    void CoinID_GenerateAGen(AssetID aid, void* pAGen);
+    CoinID_GenerateAGen(42, &u.p3.aGen);
+    StackPrint(&u, "CoinID_GenerateAGen");
 
 
     Kdf_Init(&u.p3.kdf, &u.p1.hv); // don't care if p1.hv contains garbage
@@ -318,8 +313,8 @@ void StackTestFunc()
     u.p3.cid.m_AssetID = 0;
 
     StackMark();
-    void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, AssetID aid, secp256k1_gej* pGej);
-    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.gej);
+    void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, const void* pAGen, secp256k1_gej* pGej);
+    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, 0, &u.p3.gej);
     StackPrint(&u, "CoinID_getCommRaw without aid");
 
     StackMark();
@@ -327,10 +322,10 @@ void StackTestFunc()
     StackPrint(&u, "CoinID_getSk without aid");
 
 
-    u.p3.cid.m_AssetID = 18;
+    u.p3.cid.m_AssetID = 42;
 
     StackMark();
-    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.gej);
+    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, &u.p3.aGen, &u.p3.gej);
     StackPrint(&u, "CoinID_getCommRaw with aid");
 
     StackMark();
