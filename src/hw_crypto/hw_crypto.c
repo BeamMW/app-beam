@@ -236,7 +236,6 @@ void mem_cmov(unsigned int* pDst, const unsigned int* pSrc, int flag, unsigned i
 __stack_hungry__
 static void MultiMac_Calculate_PrePhase(const MultiMac_Context* p)
 {
-	secp256k1_ge ge;
 	secp256k1_gej_set_infinity(p->m_pRes);
 
 	for (unsigned int i = 0; i < p->m_Fast; i++)
@@ -247,6 +246,7 @@ static void MultiMac_Calculate_PrePhase(const MultiMac_Context* p)
 		int carry = WNaf_Cursor_Init(pWnaf, pS);
 		if (carry)
 		{
+			secp256k1_ge ge;
 			secp256k1_ge_from_storage(&ge, p->m_pGenFast[i].m_pPt);
 			secp256k1_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge, 0);
 		}
@@ -2007,6 +2007,8 @@ int KeyKeeper_Invoke(const KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t
 
 PROTO_METHOD(Version)
 {
+	UNUSED(p);
+
 	if (nIn || nOut)
 		return c_KeyKeeper_Status_ProtoError; // size mismatch
 
@@ -2016,6 +2018,8 @@ PROTO_METHOD(Version)
 
 PROTO_METHOD(GetNumSlots)
 {
+	UNUSED(p);
+
 	if (nIn || nOut)
 		return c_KeyKeeper_Status_ProtoError; // size mismatch
 

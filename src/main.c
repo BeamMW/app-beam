@@ -26,6 +26,8 @@
 #include "io.h"
 #include "sw.h"
 #include "ui/menu.h"
+#include "handler/get_public_key.h"
+#include "handler/sign_tx.h"
 
 #include "hw_crypto/keykeeper.h"
 #include "hw_crypto/multimac.h"
@@ -46,18 +48,27 @@ uint32_t KeyKeeper_getNumSlots()
 	return 32;
 }
 
-void KeyKeeper_ReadSlot(uint32_t, UintBig*)
+void KeyKeeper_ReadSlot(uint32_t iSlot, UintBig* pRes)
 {
+    UNUSED(iSlot);
+    UNUSED(pRes);
 }
 
-void KeyKeeper_RegenerateSlot(uint32_t)
+void KeyKeeper_RegenerateSlot(uint32_t iSlot)
 {
+    UNUSED(iSlot);
 }
 
-int KeyKeeper_ConfirmSpend(Amount /*val*/, AssetID /*aid*/, const UintBig* /*pPeerID*/,
-	const TxKernelUser* /*pUser*/, const TxKernelData* /*pData*/, const UintBig* /*pKrnID*/)
+int KeyKeeper_ConfirmSpend(Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
 {
-	return c_KeyKeeper_Status_Ok;
+    UNUSED(val);
+    UNUSED(aid);
+    UNUSED(pPeerID);
+    UNUSED(pUser);
+    UNUSED(pData);
+    UNUSED(pKrnID);
+
+    return c_KeyKeeper_Status_Ok;
 }
 
 
@@ -143,7 +154,7 @@ int OnApduRcv(unsigned int rcvLen)
         _Static_assert(PATCH_VERSION >= 0 && PATCH_VERSION <= UINT8_MAX, "PATCH version must be between 0 and 255!");
 
         static const uint8_t pRes[] = { MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION };
-        _Static_assert(sizeof(pRes) == APPVERSION_LEN);
+        _Static_assert(sizeof(pRes) == APPVERSION_LEN, "");
 
         return io_send_response(pRes, sizeof(pRes), SW_OK);
 
