@@ -243,7 +243,8 @@ void StackTestFunc()
             Kdf kdf;
             CoinID cid;
             secp256k1_scalar s;
-            FlexPoint fp;
+            CompactPoint pt;
+            secp256k1_gej gej;
         } p3;
     } u;
 
@@ -299,8 +300,8 @@ void StackTestFunc()
 
     StackMark();
 
-    void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, AssetID aid, FlexPoint* pComm);
-    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.fp);
+    void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, AssetID aid, secp256k1_gej* pGej);
+    CoinID_getCommRaw(&u.p3.s, u.p3.cid.m_Amount, u.p3.cid.m_AssetID, &u.p3.gej);
 
     StackPrint(&u, "CoinID_getCommRaw without aid");
 }
