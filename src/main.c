@@ -252,13 +252,13 @@ void StackTestFunc()
 
         } p3;
 
-/*
+
         struct {
             Kdf kdf;
             secp256k1_scalar tauX;
             CompactPoint pT[2];
             RangeProof rp;
-        } p4;*/
+        } p4;
     } u;
 
 
@@ -331,6 +331,22 @@ void StackTestFunc()
     StackMark();
     CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
     StackPrint(&u, "CoinID_getSk with aid");
+
+    memset(&u.p4, 0, sizeof(u.p4));
+    Kdf_Init(&u.p4.kdf, &u.p1.hv); // don't care if p1.hv contains garbage
+
+    u.p4.rp.m_Cid.m_Amount = 774440000;
+    u.p4.rp.m_Cid.m_SubIdx = 45;
+    u.p4.rp.m_Cid.m_AssetID = 0;
+    u.p4.rp.m_pKdf = &u.p4.kdf;
+    u.p4.rp.m_pT_In = u.p4.pT;
+    u.p4.rp.m_pT_Out = u.p4.pT;
+    u.p4.rp.m_pTauX = &u.p4.tauX;
+
+    StackMark();
+    RangeProof_Calculate(&u.p4.rp);
+    StackPrint(&u, "RangeProof_Calculate");
+
 }
 
 void app_main()
