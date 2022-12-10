@@ -48,18 +48,18 @@ uint32_t KeyKeeper_getNumSlots()
 	return 32;
 }
 
-void KeyKeeper_ReadSlot(uint32_t iSlot, UintBig* pRes)
+void KeyKeeper_ReadSlot(KeyKeeper*, uint32_t iSlot, UintBig* pRes)
 {
     UNUSED(iSlot);
     UNUSED(pRes);
 }
 
-void KeyKeeper_RegenerateSlot(uint32_t iSlot)
+void KeyKeeper_RegenerateSlot(KeyKeeper*, uint32_t iSlot)
 {
     UNUSED(iSlot);
 }
 
-int KeyKeeper_ConfirmSpend(Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
+int KeyKeeper_ConfirmSpend(KeyKeeper*, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
 {
     UNUSED(val);
     UNUSED(aid);
