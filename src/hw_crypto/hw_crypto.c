@@ -1845,7 +1845,7 @@ static int Signature_IsValid_Ex(const Signature* p, const UintBig* pMsg, const U
 //////////////////////////////
 // TxKernel
 __stack_hungry__
-void TxKernel_getID_Ex(const TxKernelUser* pUser, const TxKernelData* pData, UintBig* pMsg, const UintBig* pNestedIDs, uint32_t nNestedIDs)
+void TxKernel_getID_Ex(const TxKernelUser* pUser, const TxKernelCommitments* pComms, UintBig* pMsg, const UintBig* pNestedIDs, uint32_t nNestedIDs)
 {
 	secp256k1_sha256_t sha;
 	secp256k1_sha256_initialize(&sha);
@@ -1854,7 +1854,7 @@ void TxKernel_getID_Ex(const TxKernelUser* pUser, const TxKernelData* pData, Uin
 	secp256k1_sha256_write_Num(&sha, pUser->m_hMin);
 	secp256k1_sha256_write_Num(&sha, pUser->m_hMax);
 
-	secp256k1_sha256_write_CompactPoint(&sha, &pData->m_Commitment);
+	secp256k1_sha256_write_CompactPoint(&sha, &pComms->m_Commitment);
 	secp256k1_sha256_write_Num(&sha, 0); // former m_AssetEmission
 
 	uint8_t nFlags = 0; // extended flags, irrelevent for HW wallet
@@ -1872,18 +1872,23 @@ void TxKernel_getID_Ex(const TxKernelUser* pUser, const TxKernelData* pData, Uin
 	secp256k1_sha256_finalize(&sha, pMsg->m_pVal);
 }
 
-void TxKernel_getID(const TxKernelUser* pUser, const TxKernelData* pData, UintBig* pMsg)
+void TxKernel_getID(const TxKernelUser* pUser, const TxKernelCommitments* pComms, UintBig* pMsg)
 {
-	TxKernel_getID_Ex(pUser, pData, pMsg, 0, 0);
+	TxKernel_getID_Ex(pUser, pComms, pMsg, 0, 0);
 }
 
 __stack_hungry__
-int TxKernel_IsValid(const TxKernelUser* pUser, const TxKernelData* pData)
+int TxKernel_IsValid(const TxKernelUser* pUser, const TxKernelCommitments* pComms, const UintBig* pSig)
 {
 	UintBig msg;
-	TxKernel_getID(pUser, pData, &msg);
+	TxKernel_getID(pUser, pComms, &msg);
 
-	return Signature_IsValid(&pData->m_Signature, &msg, &pData->m_Commitment);
+	Signature sig;
+	sig.m_NoncePub = pComms->m_NoncePub;
+	sig.m_k = *pSig;
+
+
+	return Signature_IsValid(&sig, &msg, &pComms->m_Commitment);
 }
 
 __stack_hungry__
@@ -1992,7 +1997,7 @@ static int HandleProtoSimple_##name(KeyKeeper* p, OpIn_##name* pIn, uint32_t nIn
 #define N2H_UintBig(p)
 #define N2H_CompactPoint(p)
 #define N2H_TxCommonOut(p)
-#define N2H_TxKernelData(p)
+#define N2H_TxSig(p)
 #define N2H_TxKernelCommitments(p)
 #define N2H_ShieldedVoucher(p)
 #define N2H_ShieldedTxoUser(p)
@@ -2392,7 +2397,7 @@ static void TxAggr_ToOffsetEx(const KeyKeeper* p, const secp256k1_scalar* pKrn, 
 
 static void TxAggr_ToOffset(const KeyKeeper* p, const secp256k1_scalar* pKrn, TxCommonOut* pTx)
 {
-	TxAggr_ToOffsetEx(p, pKrn, &pTx->m_kOffset);
+	TxAggr_ToOffsetEx(p, pKrn, &pTx->m_TxSig.m_kOffset);
 }
 
 PROTO_METHOD(TxAddCoins)
@@ -2421,13 +2426,19 @@ PROTO_METHOD(TxAddCoins)
 
 //////////////////////////////
 // KeyKeeper - Kernel modification
+typedef struct
+{
+	secp256k1_scalar m_kKrn;
+	secp256k1_scalar m_kNonce;
+} KernelKeys;
+
 __stack_hungry__
-static int KernelUpdateKeysEx(CompactPoint* pCommitment, CompactPoint* pNoncePub, const secp256k1_scalar* pSk, const secp256k1_scalar* pNonce, const TxKernelData* pAdd)
+static int KernelUpdateKeysEx(TxKernelCommitments* pComms, const KernelKeys* pKeys, const TxKernelCommitments* pAdd)
 {
 	secp256k1_gej pGej[2];
 
-	MulG(pGej, pSk);
-	MulG(pGej + 1, pNonce);
+	MulG(pGej, &pKeys->m_kKrn);
+	MulG(pGej + 1, &pKeys->m_kNonce);
 
 	if (pAdd)
 	{
@@ -2437,7 +2448,7 @@ static int KernelUpdateKeysEx(CompactPoint* pCommitment, CompactPoint* pNoncePub
 
 		secp256k1_gej_add_ge_var(pGej, pGej, &ge, 0);
 
-		if (!Point_Ge_from_Compact(&ge, &pAdd->m_Signature.m_NoncePub))
+		if (!Point_Ge_from_Compact(&ge, &pAdd->m_NoncePub))
 			return 0;
 
 		secp256k1_gej_add_ge_var(pGej + 1, pGej + 1, &ge, 0);
@@ -2445,16 +2456,29 @@ static int KernelUpdateKeysEx(CompactPoint* pCommitment, CompactPoint* pNoncePub
 
 	Point_Gej_2_Normalize(pGej);
 
-	Point_Compact_from_Ge(pCommitment, (secp256k1_ge*) pGej);
-	Point_Compact_from_Ge(pNoncePub, (secp256k1_ge*) (pGej + 1));
+	Point_Compact_from_Ge(&pComms->m_Commitment, (secp256k1_ge*) pGej);
+	Point_Compact_from_Ge(&pComms->m_NoncePub, (secp256k1_ge*) (pGej + 1));
 
 	return 1;
 }
 
-static int KernelUpdateKeys(TxKernelData* pKrn, const secp256k1_scalar* pSk, const secp256k1_scalar* pNonce, const TxKernelData* pAdd)
+static int KernelUpdateKeys(TxKernelCommitments* pComms, const KernelKeys* pKeys, const TxKernelCommitments* pAdd)
 {
-	return KernelUpdateKeysEx(&pKrn->m_Commitment, &pKrn->m_Signature.m_NoncePub, pSk, pNonce, pAdd);
+	return KernelUpdateKeysEx(pComms, pKeys, pAdd);
 }
+
+__stack_hungry__
+static void Kernel_SignPartial(UintBig* pSig, const TxKernelCommitments* pComms, const UintBig* pMsg, const KernelKeys* pKeys)
+{
+	Signature sig;
+	sig.m_NoncePub = pComms->m_NoncePub;
+
+	static_assert(sizeof(UintBig) == sizeof(secp256k1_scalar), "");
+	Signature_GetChallenge(&sig, pMsg, (secp256k1_scalar*) pSig);
+
+	Signature_SignPartialEx(pSig, (secp256k1_scalar*) pSig, &pKeys->m_kKrn, &pKeys->m_kNonce);
+}
+
 
 //////////////////////////////
 // KeyKeeper - SplitTx
@@ -2485,25 +2509,24 @@ PROTO_METHOD_SIMPLE(TxSplit)
 	NonceGenerator ng;
 	NonceGenerator_Init(&ng, szSalt, sizeof(szSalt), &hv);
 
-	secp256k1_scalar kKrn, kNonce;
-	NonceGenerator_NextScalar(&ng, &kKrn);
-	NonceGenerator_NextScalar(&ng, &kNonce);
+	KernelKeys keys;
+	NonceGenerator_NextScalar(&ng, &keys.m_kKrn);
+	NonceGenerator_NextScalar(&ng, &keys.m_kNonce);
 	SECURE_ERASE_OBJ(ng);
 
-	KernelUpdateKeys(&pOut->m_Tx.m_Krn, &kKrn, &kNonce, 0);
+	KernelUpdateKeys(&pOut->m_Tx.m_Comms, &keys, 0);
 
-	TxKernel_getID(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv);
+	TxKernel_getID(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Comms, &hv);
 
-	int res = KeyKeeper_ConfirmSpend(p, 0, 0, 0, &pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv);
+	int res = KeyKeeper_ConfirmSpend(p, 0, 0, 0, &pIn->m_Tx.m_Krn, &hv);
 	if (c_KeyKeeper_Status_Ok != res)
 		return res;
 
-	Signature_SignPartial(&pOut->m_Tx.m_Krn.m_Signature, &hv, &kKrn, &kNonce);
+	Kernel_SignPartial(&pOut->m_Tx.m_TxSig.m_kSig, &pOut->m_Tx.m_Comms, &hv, &keys);
 
-	TxAggr_ToOffset(p, &kKrn, &pOut->m_Tx);
+	TxAggr_ToOffset(p, &keys.m_kKrn, &pOut->m_Tx);
 
-	SECURE_ERASE_OBJ(kKrn);
-	SECURE_ERASE_OBJ(kNonce);
+	SECURE_ERASE_OBJ(keys);
 
 	return c_KeyKeeper_Status_Ok;
 }
@@ -2531,7 +2554,7 @@ static void GetPaymentConfirmationMsg(UintBig* pRes, const UintBig* pSender, con
 }
 
 __stack_hungry__
-static void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID)
+void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID)
 {
 	// derive key
 	secp256k1_sha256_t sha;
@@ -2568,10 +2591,10 @@ PROTO_METHOD_SIMPLE(TxReceive)
 	secp256k1_sha256_initialize(&sha);
 
 	UintBig hv;
-	TxKernel_getID(&pIn->m_Tx.m_Krn, &pIn->m_Krn, &hv); // not a final ID yet
+	TxKernel_getID(&pIn->m_Tx.m_Krn, &pIn->m_Comms, &hv); // not a final ID yet
 
 	secp256k1_sha256_write(&sha, hv.m_pVal, sizeof(hv.m_pVal));
-	secp256k1_sha256_write_CompactPoint(&sha, &pIn->m_Krn.m_Signature.m_NoncePub);
+	secp256k1_sha256_write_CompactPoint(&sha, &pIn->m_Comms.m_NoncePub); // what for?!
 
 	uint8_t nFlag = 0; // not nonconventional
 	secp256k1_sha256_write(&sha, &nFlag, sizeof(nFlag));
@@ -2591,26 +2614,26 @@ PROTO_METHOD_SIMPLE(TxReceive)
 	NonceGenerator ng;
 	NonceGenerator_Init(&ng, szSalt, sizeof(szSalt), &hv);
 
-	secp256k1_scalar kKrn, kNonce;
-	NonceGenerator_NextScalar(&ng, &kKrn);
-	NonceGenerator_NextScalar(&ng, &kNonce);
+	KernelKeys keys;
+	NonceGenerator_NextScalar(&ng, &keys.m_kKrn);
+	NonceGenerator_NextScalar(&ng, &keys.m_kNonce);
 	SECURE_ERASE_OBJ(ng);
 
-	if (!KernelUpdateKeys(&pOut->m_Tx.m_Krn, &kKrn, &kNonce, &pIn->m_Krn))
+	if (!KernelUpdateKeys(&pOut->m_Tx.m_Comms, &keys, &pIn->m_Comms))
 		return c_KeyKeeper_Status_Unspecified;
 
-	TxKernel_getID(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv); // final ID
-	Signature_SignPartial(&pOut->m_Tx.m_Krn.m_Signature, &hv, &kKrn, &kNonce);
+	TxKernel_getID(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Comms, &hv); // final ID
+	Kernel_SignPartial(&pOut->m_Tx.m_TxSig.m_kSig, &pOut->m_Tx.m_Comms, &hv, &keys);
 
-	TxAggr_ToOffset(p, &kKrn, &pOut->m_Tx);
+	TxAggr_ToOffset(p, &keys.m_kKrn, &pOut->m_Tx);
 
 	if (pIn->m_Mut.m_MyIDKey)
 	{
 		// sign
 		UintBig hvID;
-		GetWalletIDKey(p, pIn->m_Mut.m_MyIDKey, &kKrn, &hvID);
+		GetWalletIDKey(p, pIn->m_Mut.m_MyIDKey, &keys.m_kKrn, &hvID);
 		GetPaymentConfirmationMsg(&hvID, &pIn->m_Mut.m_Peer, &hv, netAmount, aid);
-		Signature_Sign(&pOut->m_PaymentProof, &hvID, &kKrn);
+		Signature_Sign(&pOut->m_PaymentProof, &hvID, &keys.m_kKrn);
 	}
 
 	return c_KeyKeeper_Status_Ok;
@@ -2623,8 +2646,7 @@ typedef struct
 	Amount m_netAmount;
 	AssetID m_Aid;
 
-	secp256k1_scalar m_kKrn;
-	secp256k1_scalar m_kNonce;
+	KernelKeys m_Keys;
 
 	UintBig m_hvMyID;
 	UintBig m_hvToken;
@@ -2634,10 +2656,10 @@ typedef struct
 __stack_hungry__
 static void TxSend_DeriveKeys(KeyKeeper* p, const OpIn_TxSend2* pIn, TxSendContext* pCtx)
 {
-	GetWalletIDKey(p, pIn->m_Mut.m_MyIDKey, &pCtx->m_kNonce, &pCtx->m_hvMyID);
+	GetWalletIDKey(p, pIn->m_Mut.m_MyIDKey, &pCtx->m_Keys.m_kNonce, &pCtx->m_hvMyID);
 
 	KeyKeeper_ReadSlot(p, pIn->m_iSlot, &pCtx->m_hvToken);
-	Kdf_Derive_SKey(&p->m_MasterKey, &pCtx->m_hvToken, &pCtx->m_kNonce);
+	Kdf_Derive_SKey(&p->m_MasterKey, &pCtx->m_hvToken, &pCtx->m_Keys.m_kNonce);
 
 	// during negotiation kernel height and commitment are adjusted. We should only commit to the Fee
 	secp256k1_sha256_t sha;
@@ -2654,21 +2676,21 @@ static void TxSend_DeriveKeys(KeyKeeper* p, const OpIn_TxSend2* pIn, TxSendConte
 	secp256k1_sha256_write_Num(&sha, pCtx->m_netAmount);
 	secp256k1_sha256_write_Num(&sha, pCtx->m_Aid);
 
-	secp256k1_scalar_get_b32(pCtx->m_hvToken.m_pVal, &pCtx->m_kNonce);
+	secp256k1_scalar_get_b32(pCtx->m_hvToken.m_pVal, &pCtx->m_Keys.m_kNonce);
 	secp256k1_sha256_write(&sha, pCtx->m_hvToken.m_pVal, sizeof(pCtx->m_hvToken.m_pVal));
 	secp256k1_sha256_finalize(&sha, pCtx->m_hvToken.m_pVal);
 
 	static const char szSalt[] = "hw-wlt-snd";
 	NonceGenerator ng;
 	NonceGenerator_Init(&ng, szSalt, sizeof(szSalt), &pCtx->m_hvToken);
-	NonceGenerator_NextScalar(&ng, &pCtx->m_kKrn);
+	NonceGenerator_NextScalar(&ng, &pCtx->m_Keys.m_kKrn);
 	SECURE_ERASE_OBJ(ng);
 
 	// derive tx token
 	secp256k1_sha256_initialize(&sha);
 	HASH_WRITE_STR(sha, "tx.token");
 
-	secp256k1_scalar_get_b32(pCtx->m_hvToken.m_pVal, &pCtx->m_kKrn);
+	secp256k1_scalar_get_b32(pCtx->m_hvToken.m_pVal, &pCtx->m_Keys.m_kKrn);
 	secp256k1_sha256_write(&sha, pCtx->m_hvToken.m_pVal, sizeof(pCtx->m_hvToken.m_pVal));
 	secp256k1_sha256_finalize(&sha, pCtx->m_hvToken.m_pVal);
 
@@ -2694,13 +2716,13 @@ int HandleTxSend(KeyKeeper* p, OpIn_TxSend2* pIn, OpOut_TxSend1* pOut1, OpOut_Tx
 
 	if (pOut1)
 	{
-		int res = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, 0, 0);
+		int res = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, 0);
 		if (c_KeyKeeper_Status_Ok != res)
 			return res;
 
 		pOut1->m_UserAgreement = ctx.m_hvToken;
 
-		KernelUpdateKeysEx(&pOut1->m_HalfKrn.m_Commitment, &pOut1->m_HalfKrn.m_NoncePub, &ctx.m_kKrn, &ctx.m_kNonce, 0);
+		KernelUpdateKeysEx(&pOut1->m_Comms, &ctx.m_Keys, 0);
 
 		return c_KeyKeeper_Status_Ok;
 	}
@@ -2710,11 +2732,7 @@ int HandleTxSend(KeyKeeper* p, OpIn_TxSend2* pIn, OpOut_TxSend1* pOut1, OpOut_Tx
 	if (memcmp(pIn->m_UserAgreement.m_pVal, ctx.m_hvToken.m_pVal, sizeof(ctx.m_hvToken.m_pVal)))
 		return c_KeyKeeper_Status_Unspecified; // incorrect user agreement token
 
-	TxKernelData krn;
-	krn.m_Commitment = pIn->m_HalfKrn.m_Commitment;
-	krn.m_Signature.m_NoncePub = pIn->m_HalfKrn.m_NoncePub;
-
-	TxKernel_getID(&pIn->m_Tx.m_Krn, &krn, &ctx.m_hvToken);
+	TxKernel_getID(&pIn->m_Tx.m_Krn, &pIn->m_Comms, &ctx.m_hvToken);
 
 	// verify payment confirmation signature
 	GetPaymentConfirmationMsg(&ctx.m_hvMyID, &ctx.m_hvMyID, &ctx.m_hvToken, ctx.m_netAmount, ctx.m_Aid);
@@ -2723,17 +2741,16 @@ int HandleTxSend(KeyKeeper* p, OpIn_TxSend2* pIn, OpOut_TxSend1* pOut1, OpOut_Tx
 		return c_KeyKeeper_Status_Unspecified;
 
 	// 2nd user confirmation request. Now the kernel is complete, its ID is calculated
-	int res = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, &krn, &ctx.m_hvMyID);
+	int res = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, &ctx.m_hvMyID);
 	if (c_KeyKeeper_Status_Ok != res)
 		return res;
 
 	// Regenerate the slot (BEFORE signing), and sign
 	KeyKeeper_RegenerateSlot(p, pIn->m_iSlot);
 
-	Signature_SignPartial(&krn.m_Signature, &ctx.m_hvToken, &ctx.m_kKrn, &ctx.m_kNonce);
+	Kernel_SignPartial(&pOut2->m_TxSig.m_kSig, &pIn->m_Comms, &ctx.m_hvToken, &ctx.m_Keys);
 
-	pOut2->m_kSig = krn.m_Signature.m_k;
-	TxAggr_ToOffsetEx(p, &ctx.m_kKrn, &pOut2->m_kOffset);
+	TxAggr_ToOffsetEx(p, &ctx.m_Keys.m_kKrn, &pOut2->m_TxSig.m_kOffset);
 
 	return c_KeyKeeper_Status_Ok;
 }
@@ -3299,7 +3316,7 @@ PROTO_METHOD_SIMPLE(TxSendShielded)
 		CoinID_GenerateAGen(aid, &aGen);
 
 	UintBig hvKrn1, hv;
-	secp256k1_scalar skKrn1, skKrnOuter, kNonce;
+	secp256k1_scalar skKrn1;
 	if (!VerifyShieldedOutputParams(p, pIn, netAmount, aid, aid ? &aGen : 0, &skKrn1, &hvKrn1))
 		return c_KeyKeeper_Status_Unspecified;
 
@@ -3315,28 +3332,29 @@ PROTO_METHOD_SIMPLE(TxSendShielded)
 	secp256k1_sha256_finalize(&sha, hv.m_pVal);
 
 	// derive keys
+	KernelKeys keys;
 	static const char szSalt[] = "hw-wlt-snd-sh";
 	NonceGenerator ng;
 	NonceGenerator_Init(&ng, szSalt, sizeof(szSalt), &hv);
-	NonceGenerator_NextScalar(&ng, &skKrnOuter);
-	NonceGenerator_NextScalar(&ng, &kNonce);
+	NonceGenerator_NextScalar(&ng, &keys.m_kKrn);
+	NonceGenerator_NextScalar(&ng, &keys.m_kNonce);
 	SECURE_ERASE_OBJ(ng);
 
-	KernelUpdateKeys(&pOut->m_Tx.m_Krn, &skKrnOuter, &kNonce, 0);
-	TxKernel_getID_Ex(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv, &hvKrn1, 1);
+	KernelUpdateKeys(&pOut->m_Tx.m_Comms, &keys, 0);
+	TxKernel_getID_Ex(&pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Comms, &hv, &hvKrn1, 1);
 
 	// all set
 	int res = pIn->m_Mut.m_MyIDKey ?
-		KeyKeeper_ConfirmSpend(p, 0, 0, 0, &pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv) :
-		KeyKeeper_ConfirmSpend(p, netAmount, aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, &pOut->m_Tx.m_Krn, &hv);
+		KeyKeeper_ConfirmSpend(p, 0, 0, 0, &pIn->m_Tx.m_Krn, &hv) :
+		KeyKeeper_ConfirmSpend(p, netAmount, aid, &pIn->m_Mut.m_Peer, &pIn->m_Tx.m_Krn, &hv);
 
 	if (c_KeyKeeper_Status_Ok != res)
 		return res;
 
-	Signature_SignPartial(&pOut->m_Tx.m_Krn.m_Signature, &hv, &skKrnOuter, &kNonce);
+	Kernel_SignPartial(&pOut->m_Tx.m_TxSig.m_kSig, &pOut->m_Tx.m_Comms, &hv, &keys);
 
-	secp256k1_scalar_add(&skKrnOuter, &skKrnOuter, &skKrn1);
-	TxAggr_ToOffset(p, &skKrnOuter, &pOut->m_Tx);
+	secp256k1_scalar_add(&keys.m_kKrn, &keys.m_kKrn, &skKrn1);
+	TxAggr_ToOffset(p, &keys.m_kKrn, &pOut->m_Tx);
 
 	return c_KeyKeeper_Status_Ok;
 }

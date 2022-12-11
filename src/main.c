@@ -72,19 +72,19 @@ int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
     return 1;
 }
 
-int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
+int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
 {
     UNUSED(p);
     UNUSED(val);
     UNUSED(aid);
     UNUSED(pPeerID);
     UNUSED(pUser);
-    UNUSED(pData);
     UNUSED(pKrnID);
 
     return c_KeyKeeper_Status_Ok;
 }
 
+#pragma pack (push, 1)
 #define THE_FIELD(type, name) type m_##name;
 
 #define THE_MACRO(id, name) \
@@ -95,6 +95,9 @@ const uint8_t g_Proto_Code_##name = id;
 BeamCrypto_ProtoMethods(THE_MACRO)
 #undef THE_MACRO
 #undef THE_FIELD
+
+#pragma pack (pop)
+
 
 int OnApduRcv(unsigned int rcvLen)
 {
@@ -387,11 +390,19 @@ void StackTestFunc2()
 {
     struct
     {
-        KeyKeeper kk;
+        KeyKeeper kk1;
+        KeyKeeper kk2;
+
+        UintBig m_hvPeer1;
+        UintBig m_hvPeer2;
+
+        TxCommonOut m_TxAux;
+        UintBig m_hvUserAggr;
 
         union
         {
             UintBig hv;
+            secp256k1_scalar kTmp;
 
             union {
                 Proto_In_GetNumSlots m_In;
@@ -407,6 +418,21 @@ void StackTestFunc2()
             } p2;
 #pragma pack (pop)
 
+            union {
+                Proto_In_TxSend1 m_In;
+                Proto_Out_TxSend1 m_Out;
+            } p3;
+
+            union {
+                Proto_In_TxReceive m_In;
+                Proto_Out_TxReceive m_Out;
+            } p4;
+
+            union {
+                Proto_In_TxSend2 m_In;
+                Proto_Out_TxSend2 m_Out;
+            } p5;
+
         } u;
 
     } s;
@@ -414,38 +440,116 @@ void StackTestFunc2()
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &s) - ((uint8_t*) &_stack));
 
     memset(&s.u.hv, 0, sizeof(s.u.hv));
-    memset(&s.kk, 0, sizeof(s.kk));
-    Kdf_Init(&s.kk.m_MasterKey, &s.u.hv);
+    memset(&s.kk1, 0, sizeof(s.kk1));
+    Kdf_Init(&s.kk1.m_MasterKey, &s.u.hv);
+
+    s.u.hv.m_pVal[0] = 4;
+    memset(&s.kk2, 0, sizeof(s.kk2));
+    Kdf_Init(&s.kk2.m_MasterKey, &s.u.hv);
+
+    void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID);
+    GetWalletIDKey(&s.kk1, 101, &s.u.kTmp, &s.m_hvPeer1);
+    GetWalletIDKey(&s.kk2, 102, &s.u.kTmp, &s.m_hvPeer2);
 
     StackMark();
 
     s.u.p1.m_In.m_OpCode = g_Proto_Code_GetNumSlots;
-    int n = KeyKeeper_Invoke(&s.kk, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
+    int n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
 
     StackPrint(&s, "GetNumSlots");
 
     PRINTF("NumSlots = %u, ret=%d\n", s.u.p1.m_Out.m_Value, n);
 
     memset(&s.u.p2, 0, sizeof(s.u.p2));
-
     s.u.p2.m_In.m_OpCode = g_Proto_Code_TxAddCoins;
     s.u.p2.m_In.m_Reset = 1;
     s.u.p2.m_In.m_Ins = 2;
     s.u.p2.m_In.m_Outs = 0;
     s.u.p2.m_In.m_InsShielded = 0;
-    s.u.p2.m_pCid[0].m_Idx = 44;
-    s.u.p2.m_pCid[0].m_Amount = 440000ull;
-    s.u.p2.m_pCid[1].m_Idx = 55;
-    s.u.p2.m_pCid[0].m_Amount = 550000ull;
+    s.u.p2.m_pCid[0].m_Idx = 1;
+    s.u.p2.m_pCid[0].m_Amount = 100;
+    s.u.p2.m_pCid[0].m_AssetID = 18;
+    s.u.p2.m_pCid[0].m_SubIdx = 3u << 24;
+    s.u.p2.m_pCid[1].m_Idx = 2;
+    s.u.p2.m_pCid[1].m_Amount = 8;
+    s.u.p2.m_pCid[1].m_SubIdx = 3u << 24;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
-    StackPrint(&s, "TxAddCoins");
+    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    StackPrint(&s, "kk1 TxAddCoins");
+
+    memset(&s.u.p2, 0, sizeof(s.u.p2));
+    s.u.p2.m_In.m_OpCode = g_Proto_Code_TxAddCoins;
+    s.u.p2.m_In.m_Reset = 1;
+    s.u.p2.m_In.m_Ins = 0;
+    s.u.p2.m_In.m_Outs = 2;
+    s.u.p2.m_In.m_InsShielded = 0;
+    s.u.p2.m_pCid[0].m_Idx = 1;
+    s.u.p2.m_pCid[0].m_Amount = 70;
+    s.u.p2.m_pCid[0].m_AssetID = 18;
+    s.u.p2.m_pCid[0].m_SubIdx = 3u << 24;
+    s.u.p2.m_pCid[1].m_Idx = 2;
+    s.u.p2.m_pCid[1].m_Amount = 30;
+    s.u.p2.m_pCid[1].m_AssetID = 18;
+    s.u.p2.m_pCid[1].m_SubIdx = 3u << 24;
+
+    StackMark();
+    n = KeyKeeper_Invoke(&s.kk2, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    StackPrint(&s, "kk2 TxAddCoins");
 
     PRINTF("ret=%d\n", n);
-    PRINTF("kk.state=%d, kk.beams=%d" "\n", (int) s.kk.m_State, (int) s.kk.u.m_TxBalance.m_RcvBeam);
-//    PRINTF("** Kk sizes = %u, %u, %u\n", sizeof(s.kk), sizeof(s.kk.m_MasterKey), sizeof(s.kk.u));
-    //PRINTF("** Kk =  %.*H\n", sizeof(s.kk), &s.kk);
+    PRINTF("kk1.state=%d, kk1.beams=%d" "\n", (int) s.kk1.m_State, (int) s.kk1.u.m_TxBalance.m_RcvBeam);
+    PRINTF("kk2.state=%d, kk2.beams=%d" "\n", (int) s.kk2.m_State, (int) s.kk2.u.m_TxBalance.m_RcvBeam);
+    //    PRINTF("** Kk sizes = %u, %u, %u\n", sizeof(s.kk), sizeof(s.kk.m_MasterKey), sizeof(s.kk.u));
+    //PRINTF("** Kk =  %.*H\n", sizeof(s.kk1), &s.kk1);
+
+    s.u.p3.m_In.m_OpCode = g_Proto_Code_TxSend1;
+    s.u.p3.m_In.m_Tx.m_Krn.m_Fee = 8;
+    s.u.p3.m_In.m_Tx.m_Krn.m_hMin = 100500;
+    s.u.p3.m_In.m_Tx.m_Krn.m_hMax = 100600;
+    s.u.p3.m_In.m_Mut.m_Peer = s.m_hvPeer2;
+    s.u.p3.m_In.m_Mut.m_MyIDKey = 101;
+    s.u.p3.m_In.m_iSlot = 15;
+
+    StackMark();
+    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p3, sizeof(s.u.p3.m_In), sizeof(s.u.p3.m_Out));
+    StackPrint(&s, "TxSend1");
+    PRINTF("ret=%d\n", n);
+
+    s.m_TxAux.m_Comms = s.u.p3.m_Out.m_Comms;
+    s.m_hvUserAggr = s.u.p3.m_Out.m_UserAgreement;
+
+    s.u.p4.m_In.m_OpCode = g_Proto_Code_TxReceive;
+    s.u.p4.m_In.m_Tx.m_Krn.m_Fee = 8;
+    s.u.p4.m_In.m_Tx.m_Krn.m_hMin = 100500;
+    s.u.p4.m_In.m_Tx.m_Krn.m_hMax = 100600;
+    s.u.p4.m_In.m_Mut.m_Peer = s.m_hvPeer1;
+    s.u.p4.m_In.m_Mut.m_MyIDKey = 102;
+    s.u.p4.m_In.m_Comms = s.m_TxAux.m_Comms;
+
+    StackMark();
+    n = KeyKeeper_Invoke(&s.kk2, (uint8_t*) &s.u.p4, sizeof(s.u.p4.m_In), sizeof(s.u.p4.m_Out));
+    StackPrint(&s, "TxReceive");
+    PRINTF("ret=%d\n", n);
+
+    memmove(&s.u.p5.m_In.m_PaymentProof, &s.u.p4.m_Out.m_PaymentProof, sizeof(s.u.p5.m_In.m_PaymentProof));
+
+    s.m_TxAux = s.u.p4.m_Out.m_Tx;
+
+    s.u.p5.m_In.m_OpCode = g_Proto_Code_TxSend2;
+    s.u.p5.m_In.m_Tx.m_Krn.m_Fee = 8;
+    s.u.p5.m_In.m_Tx.m_Krn.m_hMin = 100500;
+    s.u.p5.m_In.m_Tx.m_Krn.m_hMax = 100600;
+    s.u.p5.m_In.m_Mut.m_Peer = s.m_hvPeer2;
+    s.u.p5.m_In.m_Mut.m_MyIDKey = 101;
+    s.u.p5.m_In.m_iSlot = 15;
+    s.u.p5.m_In.m_Comms = s.m_TxAux.m_Comms;
+    s.u.p5.m_In.m_UserAgreement = s.m_hvUserAggr;
+
+    StackMark();
+    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p5, sizeof(s.u.p5.m_In), sizeof(s.u.p5.m_Out));
+    StackPrint(&s, "TxSend2");
+    PRINTF("ret=%d\n", n);
 }
 
 void app_main()
