@@ -386,15 +386,22 @@ void StackTestFunc()
 
 }
 
+void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID);
+
+__attribute__((noinline))
+void GetWalletIDKey2(const KeyKeeper* p, WalletIdentity nKey, UintBig* pID)
+{
+    secp256k1_scalar sk;
+    GetWalletIDKey(p, nKey, &sk, pID);
+}
+
+
 void StackTestFunc2()
 {
     struct
     {
         KeyKeeper kk1;
         KeyKeeper kk2;
-
-        UintBig m_hvPeer1;
-        UintBig m_hvPeer2;
 
         TxCommonOut m_TxAux;
         UintBig m_hvUserAggr;
@@ -446,10 +453,6 @@ void StackTestFunc2()
     s.u.hv.m_pVal[0] = 4;
     memset(&s.kk2, 0, sizeof(s.kk2));
     Kdf_Init(&s.kk2.m_MasterKey, &s.u.hv);
-
-    void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID);
-    GetWalletIDKey(&s.kk1, 101, &s.u.kTmp, &s.m_hvPeer1);
-    GetWalletIDKey(&s.kk2, 102, &s.u.kTmp, &s.m_hvPeer2);
 
     StackMark();
 
@@ -507,7 +510,7 @@ void StackTestFunc2()
     s.u.p3.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p3.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p3.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    s.u.p3.m_In.m_Mut.m_Peer = s.m_hvPeer2;
+    GetWalletIDKey2(&s.kk2, 102, &s.u.p3.m_In.m_Mut.m_Peer);
     s.u.p3.m_In.m_Mut.m_MyIDKey = 101;
     s.u.p3.m_In.m_iSlot = 15;
 
@@ -523,8 +526,9 @@ void StackTestFunc2()
     s.u.p4.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p4.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p4.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    s.u.p4.m_In.m_Mut.m_Peer = s.m_hvPeer1;
-    s.u.p4.m_In.m_Mut.m_MyIDKey = 102;
+    GetWalletIDKey2(&s.kk1, 101, &s.u.p4.m_In.m_Mut.m_Peer);
+
+   s.u.p4.m_In.m_Mut.m_MyIDKey = 102;
     s.u.p4.m_In.m_Comms = s.m_TxAux.m_Comms;
 
     StackMark();
@@ -540,7 +544,7 @@ void StackTestFunc2()
     s.u.p5.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p5.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p5.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    s.u.p5.m_In.m_Mut.m_Peer = s.m_hvPeer2;
+    GetWalletIDKey2(&s.kk2, 102, &s.u.p5.m_In.m_Mut.m_Peer);
     s.u.p5.m_In.m_Mut.m_MyIDKey = 101;
     s.u.p5.m_In.m_iSlot = 15;
     s.u.p5.m_In.m_Comms = s.m_TxAux.m_Comms;
@@ -558,6 +562,7 @@ void app_main()
 	_stack = STACK_MARK;
 	
     StackTestFunc();
+    StackTestFunc2();
 
     io_init();
 
