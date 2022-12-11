@@ -48,19 +48,33 @@ uint32_t KeyKeeper_getNumSlots()
 	return 32;
 }
 
-void KeyKeeper_ReadSlot(KeyKeeper*, uint32_t iSlot, UintBig* pRes)
+void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
 {
+    UNUSED(p);
     UNUSED(iSlot);
     UNUSED(pRes);
 }
 
-void KeyKeeper_RegenerateSlot(KeyKeeper*, uint32_t iSlot)
+void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
 {
+    UNUSED(p);
     UNUSED(iSlot);
 }
 
-int KeyKeeper_ConfirmSpend(KeyKeeper*, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
+Amount KeyKeeper_get_MaxShieldedFee()
 {
+    return 0;
+}
+
+int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
+{
+    UNUSED(p);
+    return 1;
+}
+
+int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const TxKernelData* pData, const UintBig* pKrnID)
+{
+    UNUSED(p);
     UNUSED(val);
     UNUSED(aid);
     UNUSED(pPeerID);
@@ -71,7 +85,16 @@ int KeyKeeper_ConfirmSpend(KeyKeeper*, Amount val, AssetID aid, const UintBig* p
     return c_KeyKeeper_Status_Ok;
 }
 
+#define THE_FIELD(type, name) type m_##name;
 
+#define THE_MACRO(id, name) \
+typedef struct { uint8_t m_OpCode; BeamCrypto_ProtoRequest_##name(THE_FIELD) } Proto_In_##name; \
+typedef struct { BeamCrypto_ProtoResponse_##name(THE_FIELD) } Proto_Out_##name; \
+const uint8_t g_Proto_Code_##name = id;
+
+BeamCrypto_ProtoMethods(THE_MACRO)
+#undef THE_MACRO
+#undef THE_FIELD
 
 int OnApduRcv(unsigned int rcvLen)
 {
@@ -259,7 +282,18 @@ void StackTestFunc()
             CompactPoint pT[2];
             RangeProof rp;
         } p4;
+
+        uint8_t m_pArr[4];
+        uint32_t m_TheVal;
+
     } u;
+
+    u.m_TheVal = 0;
+    u.m_pArr[0] = 1;
+    PRINTF("@@ TheVal = %u\n", u.m_TheVal);
+
+    u.m_TheVal = __builtin_bswap32(u.m_TheVal);
+    PRINTF("@@ TheVal = %u\n", u.m_TheVal);
 
 
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &u) - ((uint8_t*) &_stack));
@@ -337,7 +371,7 @@ void StackTestFunc()
 
     u.p4.rp.m_Cid.m_Amount = 774440000;
     u.p4.rp.m_Cid.m_SubIdx = 45;
-    u.p4.rp.m_Cid.m_AssetID = 0;
+    u.p4.rp.m_Cid.m_AssetID = 8;
     u.p4.rp.m_pKdf = &u.p4.kdf;
     u.p4.rp.m_pT_In = u.p4.pT;
     u.p4.rp.m_pT_Out = u.p4.pT;
@@ -347,6 +381,71 @@ void StackTestFunc()
     RangeProof_Calculate(&u.p4.rp);
     StackPrint(&u, "RangeProof_Calculate");
 
+}
+
+void StackTestFunc2()
+{
+    struct
+    {
+        KeyKeeper kk;
+
+        union
+        {
+            UintBig hv;
+
+            union {
+                Proto_In_GetNumSlots m_In;
+                Proto_Out_GetNumSlots m_Out;
+            } p1;
+
+#pragma pack (push, 1)
+            struct {
+
+                Proto_In_TxAddCoins m_In;
+                CoinID m_pCid[2];
+
+            } p2;
+#pragma pack (pop)
+
+        } u;
+
+    } s;
+
+    PRINTF("@@ Stack available: %u\n", ((uint8_t*) &s) - ((uint8_t*) &_stack));
+
+    memset(&s.u.hv, 0, sizeof(s.u.hv));
+    memset(&s.kk, 0, sizeof(s.kk));
+    Kdf_Init(&s.kk.m_MasterKey, &s.u.hv);
+
+    StackMark();
+
+    s.u.p1.m_In.m_OpCode = g_Proto_Code_GetNumSlots;
+    int n = KeyKeeper_Invoke(&s.kk, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
+
+    StackPrint(&s, "GetNumSlots");
+
+    PRINTF("NumSlots = %u, ret=%d\n", s.u.p1.m_Out.m_Value, n);
+
+    memset(&s.u.p2, 0, sizeof(s.u.p2));
+
+    s.u.p2.m_In.m_OpCode = g_Proto_Code_TxAddCoins;
+    s.u.p2.m_In.m_Reset = 1;
+    s.u.p2.m_In.m_Ins = 2;
+    s.u.p2.m_In.m_Outs = 0;
+    s.u.p2.m_In.m_InsShielded = 0;
+    s.u.p2.m_pCid[0].m_Idx = 44;
+    s.u.p2.m_pCid[0].m_Amount = 440000ull;
+    s.u.p2.m_pCid[1].m_Idx = 55;
+    s.u.p2.m_pCid[0].m_Amount = 550000ull;
+
+    StackMark();
+    n = KeyKeeper_Invoke(&s.kk, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    StackPrint(&s, "TxAddCoins");
+
+    PRINTF("ret=%d\n", n);
+    PRINTF("kk.state=%d, kk.beams=%d" "\n", (int) s.kk.m_State, (int) s.kk.u.m_TxBalance.m_RcvBeam);
+//    PRINTF("** Kk sizes = %u, %u, %u\n", sizeof(s.kk), sizeof(s.kk.m_MasterKey), sizeof(s.kk.u));
+    //PRINTF("** Kk =  %.*H\n", sizeof(s.kk), &s.kk);
 }
 
 void app_main()

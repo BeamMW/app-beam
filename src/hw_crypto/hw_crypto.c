@@ -2405,7 +2405,7 @@ PROTO_METHOD(TxAddCoins)
 	else
 		pArg->m_Out.m_Dummy = 0;
 
-	return c_KeyKeeper_Status_Ok;
+	return status;
 }
 
 //////////////////////////////
