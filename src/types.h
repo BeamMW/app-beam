@@ -26,20 +26,6 @@ typedef enum {
     SIGN_TX = 0x06          /// sign transaction with BIP32 path
 } command_e;
 
-/**
- * Structure with fields of APDU command.
- */
-
-#pragma pack (push, 1)
-typedef struct {
-    uint8_t cla;    /// Instruction class
-    command_e ins;  /// Instruction code
-    uint8_t p1;     /// Instruction parameter 1
-    uint8_t p2;     /// Instruction parameter 2
-    uint8_t lc;     /// Length of command data
-    uint8_t data[0];  /// Command data, variable length
-} command_t;
-#pragma pack (pop)
 
 /**
  * Enumeration with parsing state.
