@@ -84,6 +84,13 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
     return c_KeyKeeper_Status_Ok;
 }
 
+void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
+{
+    UNUSED(p);
+    UNUSED(addrID);
+    UNUSED(pAddr);
+}
+
 #pragma pack (push, 1)
 #define THE_FIELD(type, name) type m_##name;
 
@@ -248,6 +255,13 @@ void StackPrint(const void* p, const char* sz)
     PRINTF("@@ Op=%s, Stack consumed: %u\n", sz, (((uint32_t*) p) - pMark) * sizeof(uint32_t));
 }
 
+int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t nOut)
+{
+    return KeyKeeper_Invoke(p, pInOut, nIn, &nOut);
+}
+
+
+
 void StackTestFunc()
 {
     union {
@@ -386,13 +400,13 @@ void StackTestFunc()
 
 }
 
-void GetWalletIDKey(const KeyKeeper* p, WalletIdentity nKey, secp256k1_scalar* pKey, UintBig* pID);
+void DeriveAddress(const KeyKeeper* p, AddrID addrID, secp256k1_scalar* pKey, UintBig* pAddr);
 
 __attribute__((noinline))
-void GetWalletIDKey2(const KeyKeeper* p, WalletIdentity nKey, UintBig* pID)
+void DeriveAddress2(const KeyKeeper* p, AddrID addrID, UintBig* pAddr)
 {
     secp256k1_scalar sk;
-    GetWalletIDKey(p, nKey, &sk, pID);
+    DeriveAddress(p, addrID, &sk, pAddr);
 }
 
 
@@ -457,7 +471,7 @@ void StackTestFunc2()
     StackMark();
 
     s.u.p1.m_In.m_OpCode = g_Proto_Code_GetNumSlots;
-    int n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
+    int n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
 
     StackPrint(&s, "GetNumSlots");
 
@@ -478,7 +492,7 @@ void StackTestFunc2()
     s.u.p2.m_pCid[1].m_SubIdx = 3u << 24;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
     StackPrint(&s, "kk1 TxAddCoins");
 
     memset(&s.u.p2, 0, sizeof(s.u.p2));
@@ -497,7 +511,7 @@ void StackTestFunc2()
     s.u.p2.m_pCid[1].m_SubIdx = 3u << 24;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk2, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    n = KeyKeeper_InvokeExact(&s.kk2, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
     StackPrint(&s, "kk2 TxAddCoins");
 
     PRINTF("ret=%d\n", n);
@@ -510,12 +524,12 @@ void StackTestFunc2()
     s.u.p3.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p3.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p3.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    GetWalletIDKey2(&s.kk2, 102, &s.u.p3.m_In.m_Mut.m_Peer);
-    s.u.p3.m_In.m_Mut.m_MyIDKey = 101;
+    DeriveAddress2(&s.kk2, 102, &s.u.p3.m_In.m_Mut.m_Peer);
+    s.u.p3.m_In.m_Mut.m_AddrID = 101;
     s.u.p3.m_In.m_iSlot = 15;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p3, sizeof(s.u.p3.m_In), sizeof(s.u.p3.m_Out));
+    n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p3, sizeof(s.u.p3.m_In), sizeof(s.u.p3.m_Out));
     StackPrint(&s, "TxSend1");
     PRINTF("ret=%d\n", n);
 
@@ -526,13 +540,13 @@ void StackTestFunc2()
     s.u.p4.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p4.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p4.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    GetWalletIDKey2(&s.kk1, 101, &s.u.p4.m_In.m_Mut.m_Peer);
+    DeriveAddress2(&s.kk1, 101, &s.u.p4.m_In.m_Mut.m_Peer);
 
-   s.u.p4.m_In.m_Mut.m_MyIDKey = 102;
+   s.u.p4.m_In.m_Mut.m_AddrID = 102;
     s.u.p4.m_In.m_Comms = s.m_TxAux.m_Comms;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk2, (uint8_t*) &s.u.p4, sizeof(s.u.p4.m_In), sizeof(s.u.p4.m_Out));
+    n = KeyKeeper_InvokeExact(&s.kk2, (uint8_t*) &s.u.p4, sizeof(s.u.p4.m_In), sizeof(s.u.p4.m_Out));
     StackPrint(&s, "TxReceive");
     PRINTF("ret=%d\n", n);
 
@@ -544,14 +558,14 @@ void StackTestFunc2()
     s.u.p5.m_In.m_Tx.m_Krn.m_Fee = 8;
     s.u.p5.m_In.m_Tx.m_Krn.m_hMin = 100500;
     s.u.p5.m_In.m_Tx.m_Krn.m_hMax = 100600;
-    GetWalletIDKey2(&s.kk2, 102, &s.u.p5.m_In.m_Mut.m_Peer);
-    s.u.p5.m_In.m_Mut.m_MyIDKey = 101;
+    DeriveAddress2(&s.kk2, 102, &s.u.p5.m_In.m_Mut.m_Peer);
+    s.u.p5.m_In.m_Mut.m_AddrID = 101;
     s.u.p5.m_In.m_iSlot = 15;
     s.u.p5.m_In.m_Comms = s.m_TxAux.m_Comms;
     s.u.p5.m_In.m_UserAgreement = s.m_hvUserAggr;
 
     StackMark();
-    n = KeyKeeper_Invoke(&s.kk1, (uint8_t*) &s.u.p5, sizeof(s.u.p5.m_In), sizeof(s.u.p5.m_Out));
+    n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p5, sizeof(s.u.p5.m_In), sizeof(s.u.p5.m_Out));
     StackPrint(&s, "TxSend2");
     PRINTF("ret=%d\n", n);
 }
@@ -563,6 +577,7 @@ void app_main()
 	
     StackTestFunc();
     StackTestFunc2();
+    //halt();
 
     io_init();
 
