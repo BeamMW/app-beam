@@ -358,6 +358,7 @@ void ui_menu_initial()
 
 
 
+/*
 typedef void (*action_validate_cb)(bool);
 static action_validate_cb g_validate_callback;
 static char g_amount[30];
@@ -411,7 +412,7 @@ UX_FLOW(ux_display_pubkey_flow,
         &ux_display_reject_step);
 
 int ui_display_address() {
-/*    if (G_context.req_type != CONFIRM_ADDRESS || G_context.state != STATE_NONE) {
+    if (G_context.req_type != CONFIRM_ADDRESS || G_context.state != STATE_NONE) {
         G_context.state = STATE_NONE;
         return io_send_sw(SW_BAD_STATE);
     }
@@ -431,7 +432,7 @@ int ui_display_address() {
     }
     snprintf(g_address, sizeof(g_address), "0x%.*H", sizeof(address), address);
     g_validate_callback = &ui_action_validate_pubkey;
-*/
+
 
     ux_flow_init(0, ux_display_pubkey_flow, NULL);
 
@@ -468,7 +469,7 @@ UX_FLOW(ux_display_transaction_flow,
         &ux_display_reject_step);
 
 int ui_display_transaction() {
-/*    if (G_context.req_type != CONFIRM_TRANSACTION || G_context.state != STATE_PARSED) {
+    if (G_context.req_type != CONFIRM_TRANSACTION || G_context.state != STATE_PARSED) {
         G_context.state = STATE_NONE;
         return io_send_sw(SW_BAD_STATE);
     }
@@ -488,12 +489,12 @@ int ui_display_transaction() {
     //snprintf(g_address, sizeof(g_address), "0x%.*H", ADDRESS_LEN, G_context.tx_info.transaction.to);
 
     g_validate_callback = &ui_action_validate_transaction;
-*/
+
     ux_flow_init(0, ux_display_transaction_flow, NULL);
 
     return 0;
 }
-
+*/
 
 
 void SecureEraseMem(void* p, uint32_t n)
