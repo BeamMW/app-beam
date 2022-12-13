@@ -25,6 +25,9 @@
 uint8_t DoModal();
 void EndModal(uint8_t res);
 
+extern ux_state_t G_ux; // Global structure to perform asynchronous UX aside IO operations.
+
+
 // unit tests
 void BeamStackTest1();
 void BeamStackTest2();
@@ -33,5 +36,5 @@ void OnBeamInvalidRequest();
 uint16_t OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut);
 
 void ui_menu_main();
-
-extern ux_state_t G_ux; // Global structure to perform asynchronous UX aside IO operations.
+void ui_menu_initial(); // can be different from main for testing
+void ui_menu_about();

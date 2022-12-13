@@ -33,50 +33,150 @@ void DeriveAddress2(const KeyKeeper* p, AddrID addrID, UintBig* pAddr)
     DeriveAddress(p, addrID, &sk, pAddr);
 }
 
+/////////////////////////////////////
+// Formatting
+char Hex2Char(uint8_t x)
+{
+    return (x >= 0xa) ? (x + ('a' - 0xa)) : (x + '0');
+}
 
+void PrintHex(char* sz, const uint8_t* p, unsigned int n)
+{
+    for (unsigned int i = 0; i < n; i++)
+    {
+        uint8_t x = p[i];
+        *sz++ = Hex2Char(x >> 4);
+        *sz++ = Hex2Char(x & 0xf);
+    }
+    *sz = 0;
+}
 
-void ui_menu_main();
-void ui_menu_about();
+void PrintUintBig(char* sz, const UintBig* p)
+{
+    PrintHex(sz, p->m_pVal, sizeof(UintBig));
+}
 
+void PrintUintBig_8(char* sz, const UintBig* p, uint32_t iStep)
+{
+    const uint8_t* pSrc = p->m_pVal + iStep * 8;
 
-UX_STEP_NOCB(ux_menu_info_step, bn, {"Beam App", "(c) 2020 Beam"});
-UX_STEP_CB(ux_menu_back_step, pb, ui_menu_main(), {&C_icon_back, "Back"});
-
-// FLOW for the about submenu:
-// #1 screen: app info
-// #2 screen: back button to main menu
-UX_FLOW(ux_menu_about_flow, &ux_menu_info_step, &ux_menu_back_step, FLOW_LOOP);
-
-void ui_menu_about() {
-    ux_flow_init(0, ux_menu_about_flow, NULL);
+    PrintHex(sz, pSrc, 4);
+    sz[8] = ' ';
+    sz[9] = '-';
+    sz[10] = ' ';
+    PrintHex(sz + 11, pSrc + 4, 4);
 }
 
 
+/////////////////////////////////////
+// State for ui elements on-demand formatting
 
-UX_STEP_NOCB(ux_menu_ready_step, pnn, { &C_beam_logo, "Beam", "is ready" });
-UX_STEP_NOCB(ux_menu_version_step, bn, { "Version", APPVERSION });
-UX_STEP_CB(ux_menu_about_step, pb, ui_menu_about(), { &C_icon_certificate, "About" });
-UX_STEP_VALID(ux_menu_exit_step, pb, os_sched_exit(-1), { &C_icon_dashboard_x, "Quit" });
+static char g_szLine1[sizeof(UintBig) + 1];
+static char g_szLine2[sizeof(UintBig) + 1];
 
-// FLOW for the main menu:
-// #1 screen: ready
-// #2 screen: version of the app
-// #3 screen: about submenu
-// #4 screen: quit
-UX_FLOW(ux_menu_main_flow,
-    &ux_menu_ready_step,
-    &ux_menu_version_step,
-    &ux_menu_about_step,
-    &ux_menu_exit_step,
+union
+{
+    struct {
+        AddrID m_addrID;
+        const UintBig* m_pAddr;
+    } m_Addr;
+
+} g_Ux_U;
+
+
+/////////////////////////////////////
+// ui About
+void ui_menu_main_about();
+
+UX_STEP_NOCB(ux_step_about_info, bn, {"Beam App", "(c) 2020 Beam"});
+UX_STEP_CB(ux_step_about_back, pb, ui_menu_main_about(), {&C_icon_back, "Back"});
+
+UX_FLOW(
+    ux_flow_about,
+    &ux_step_about_info,
+    &ux_step_about_back,
+    FLOW_LOOP
+);
+
+void ui_menu_about()
+{
+    ux_flow_init(0, ux_flow_about, NULL);
+}
+
+/////////////////////////////////////
+// ui Main
+UX_STEP_NOCB(ux_step_main_ready, pnn, { &C_beam_logo, "Beam", "is ready" });
+UX_STEP_NOCB(ux_step_main_version, bn, { "Version", APPVERSION });
+UX_STEP_CB(ux_step_main_about, pb, ui_menu_about(), { &C_icon_certificate, "About" });
+UX_STEP_VALID(ux_step_main_quit, pb, os_sched_exit(-1), { &C_icon_dashboard_x, "Quit" });
+
+UX_FLOW(ux_flow_main,
+    &ux_step_main_ready,
+    &ux_step_main_version,
+    &ux_step_main_about,
+    &ux_step_main_quit,
     FLOW_LOOP);
 
-void ui_menu_main() {
-    if (G_ux.stack_count == 0) {
+void ui_menu_main()
+{
+    ux_flow_init(0, ux_flow_main, NULL);
+}
+
+void ui_menu_main_about()
+{
+    ux_flow_init(0, ux_flow_main, &ux_step_main_about);
+}
+
+//////////////////////
+// Display address
+UX_STEP_CB_INIT(ux_step_address_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Ok), { "Your address 1/4", g_szLine1 });
+UX_STEP_CB_INIT(ux_step_address_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 1), EndModal(c_Modal_Ok), { "Your address 2/4", g_szLine1 });
+UX_STEP_CB_INIT(ux_step_address_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 2), EndModal(c_Modal_Ok), { "Your address 3/4", g_szLine1 });
+UX_STEP_CB_INIT(ux_step_address_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 3), EndModal(c_Modal_Ok), { "Your address 4/4", g_szLine1 });
+
+UX_FLOW(ux_flow_address,
+    &ux_step_address_1,
+    &ux_step_address_2,
+    &ux_step_address_3,
+    &ux_step_address_4
+    );
+
+
+void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
+{
+    UNUSED(p);
+
+    g_Ux_U.m_Addr.m_addrID = addrID;
+    g_Ux_U.m_Addr.m_pAddr = pAddr;
+
+    ux_flow_init(0, ux_flow_address, NULL);
+    DoModal();
+    ui_menu_main();
+}
+
+
+void ui_menu_initial()
+{
+    UX_INIT();
+    if (!G_ux.stack_count)
         ux_stack_push();
+
+    //ui_menu_main();
+
+    {
+        KeyKeeper kk;
+        UintBig hv;
+
+        memset(&hv, 0, sizeof(hv));
+        Kdf_Init(&kk.m_MasterKey, &hv);
+
+        DeriveAddress2(&kk, 16, &hv);
+
+        KeyKeeper_DisplayAddress(&kk, 16, &hv);
     }
 
-    ux_flow_init(0, ux_menu_main_flow, NULL);
 }
+
 
 
 typedef void (*action_validate_cb)(bool);
@@ -263,59 +363,9 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
     return c_KeyKeeper_Status_Ok;
 }
 
-char Hex2Char(uint8_t x)
-{
-    return (x >= 0xa) ? (x + ('a' - 0xa)) : (x + '0');
-}
-
-void PrintHex(char* sz, const uint8_t* p, unsigned int n)
-{
-    for (unsigned int i = 0; i < n; i++)
-    {
-        uint8_t x = p[i];
-        *sz++ = Hex2Char(x >> 4);
-        *sz++ = Hex2Char(x & 0xf);
-    }
-    *sz = 0;
-}
-
-void PrintUintBig(char* sz, const UintBig* p)
-{
-    PrintHex(sz, p->m_pVal, sizeof(UintBig));
-}
-
-static char g_szLine1[sizeof(UintBig) * 2 + 1];
-
-union
-{
-    struct {
-        AddrID m_addrID;
-        const UintBig* m_pAddr;
-    } m_Addr;
-
-} g_Ux_U;
-
-//////////////////////
-// Display address
-
-UX_STEP_CB_INIT(UxStep_Address, bnnn_paging, PrintUintBig(g_szLine1, g_Ux_U.m_Addr.m_pAddr), EndModal(c_Modal_Ok), { "Your address", g_szLine1 });
-
-UX_FLOW(UxFlow_Address,
-    &UxStep_Address
-);
 
 
-void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
-{
-    UNUSED(p);
 
-    g_Ux_U.m_Addr.m_addrID = addrID;
-    g_Ux_U.m_Addr.m_pAddr = pAddr;
-
-    ux_flow_init(0, UxFlow_Address, NULL);
-    DoModal();
-    ui_menu_main();
-}
 
 #pragma pack (push, 1)
 #define THE_FIELD(type, name) type m_##name;
@@ -339,19 +389,44 @@ int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t 
 }
 
 
-void OnBeamInvalidRequest()
+
+void OnSomeDemo()
 {
+    typedef struct {
+        KeyKeeper kk;
+        UintBig hv;
+        CompactPoint pPt[2];
+    } Ctx;
+
+    Ctx* pCtx = (Ctx*) G_io_apdu_buffer;
+
     // for fun!
-    KeyKeeper kk;
-    memset(&kk, 0, sizeof(kk));
+    memset(pCtx, 0, sizeof(*pCtx));
 
-    UintBig hv;
-    memset(&hv, 0x11, sizeof(hv));
-    Kdf_Init(&kk.m_MasterKey, &hv);
+    memset(&pCtx->hv, 0x11, sizeof(pCtx->hv));
+    Kdf_Init(&pCtx->kk.m_MasterKey, &pCtx->hv);
 
-    DeriveAddress2(&kk, 15, &hv);
+    RangeProof rp;
+    memset(&rp, 0, sizeof(rp));
 
-    KeyKeeper_DisplayAddress(0, 15, &hv);
+    rp.m_pKdf = &pCtx->kk.m_MasterKey;
+
+    rp.m_Cid.m_Amount = 400000;
+    rp.m_Cid.m_Idx = 15;
+    rp.m_Cid.m_Type = 0x22;
+    rp.m_Cid.m_SubIdx = 8;
+    rp.m_Cid.m_Amount = 4500000000ull;
+    rp.m_Cid.m_AssetID = 0;
+
+    rp.m_pT_In = pCtx->pPt;
+    rp.m_pT_Out = pCtx->pPt;
+    rp.m_pTauX = (secp256k1_scalar *) &pCtx->hv;
+
+    memset(&pCtx->hv, 0x11, sizeof(pCtx->hv));
+
+    RangeProof_Calculate(&rp);
+
+    KeyKeeper_DisplayAddress(0, 15, &pCtx->hv);
 
 /*
     {
@@ -379,6 +454,11 @@ void OnBeamInvalidRequest()
         PRINTF("=> @ rp res=%d\n", res);
     }
 */
+}
+
+void OnBeamInvalidRequest()
+{
+    // maybe display something?
 }
 
 uint16_t OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)

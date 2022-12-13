@@ -163,8 +163,6 @@ void app_main()
     PRINTF("gux_params_len=%u\n", sizeof(G_ux_params));
 	PRINTF("canary_ptr=%x\n", &_stack);
 
-    OnBeamInvalidRequest();
-
     for (int ioLen = 0; ; )
     {
 		PRINTF("Stack canary=%x\n", _stack);
@@ -234,7 +232,7 @@ __attribute__((section(".boot"))) int main() {
                 USB_power(0);
                 USB_power(1);
 
-                ui_menu_main();
+                ui_menu_initial();
 
 #ifdef HAVE_BLE
                 BLE_power(0, NULL);
