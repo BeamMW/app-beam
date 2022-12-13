@@ -274,8 +274,8 @@ UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address
 UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 0), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 2), { g_szLine1, g_szLine2 });
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
 
@@ -287,6 +287,16 @@ UX_FLOW(ux_flow_send,
     &ux_step_send_receiver,
     &ux_step_send_receiver_1,
     &ux_step_send_receiver_2,
+    &ux_step_send_krnid,
+    &ux_step_send_krnid_1,
+    &ux_step_send_krnid_2,
+    &ux_step_send_Ok);
+
+UX_STEP_NOCB(ux_step_split_review, bb, { "Please review", "Split transaction" });
+
+UX_FLOW(ux_flow_split,
+    &ux_step_split_review,
+    &ux_step_send_fee,
     &ux_step_send_krnid,
     &ux_step_send_krnid_1,
     &ux_step_send_krnid_2,
@@ -307,7 +317,7 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
     g_Ux_U.m_Spend.m_pKrnID = pKrnID;
 
 
-    ux_flow_init(0, ux_flow_send, NULL);
+    ux_flow_init(0, pPeerID ? ux_flow_send : ux_flow_split, NULL);
     uint8_t res = DoModal();
     ui_menu_main();
 
