@@ -30,7 +30,7 @@ endif
 APP_LOAD_PARAMS += --path "44'"
 APP_LOAD_PARAMS += $(COMMON_LOAD_PARAMS)
 
-APPNAME      = "Boilerplate"
+APPNAME      = "Beam"
 APPVERSION_M = 1
 APPVERSION_N = 0
 APPVERSION_P = 1
@@ -143,5 +143,5 @@ build_all:
 		set -- $${SDK};                                                 \
 		$(MAKE) clean;                                                  \
 		$(MAKE) all BOLOS_SDK=$$1;                                      \
-		mv bin/app.elf tests/elfs/boilerplate_$$2.elf;                  \
+		mv bin/app.elf tests/elfs/beam_$$2.elf;                  \
 	done

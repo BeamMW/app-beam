@@ -169,8 +169,8 @@ void app_main()
 
 	_stack = STACK_MARK;
 	
-    BeamStackTest1();
-    BeamStackTest2();
+    //BeamStackTest1();
+    //BeamStackTest2();
     //halt();
 
     io_init();
@@ -186,7 +186,7 @@ void app_main()
     PRINTF("G_context_len=%u\n", sizeof(G_context));
 	PRINTF("canary_ptr=%x\n", &_stack);
 
-    //OnBeamInvalidRequest();
+    OnBeamInvalidRequest();
 
     for (int ioLen = 0; ; )
     {

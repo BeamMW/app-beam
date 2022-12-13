@@ -176,9 +176,16 @@ int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t 
 void OnBeamInvalidRequest()
 {
     // for fun!
-    UintBig hvAddr;
-    memset(&hvAddr, 0x2e, sizeof(hvAddr));
-    KeyKeeper_DisplayAddress(0, 12, &hvAddr);
+    KeyKeeper kk;
+    memset(&kk, 0, sizeof(kk));
+
+    UintBig hv;
+    memset(&hv, 0x11, sizeof(hv));
+    Kdf_Init(&kk.m_MasterKey, &hv);
+
+    DeriveAddress2(&kk, 15, &hv);
+
+    KeyKeeper_DisplayAddress(0, 15, &hv);
 
 /*
     {
