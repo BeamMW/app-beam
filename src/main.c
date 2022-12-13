@@ -21,14 +21,12 @@
 
 #include "os.h"
 #include "ux.h"
+#include "os_io_seproxyhal.h"
 
 #include "types.h"
 #include "globals.h"
-#include "io.h"
 #include "sw.h"
 #include "ui/menu.h"
-#include "handler/get_public_key.h"
-#include "handler/sign_tx.h"
 
 #include "BeamApp.h"
 #include "hw_crypto/byteorder.h"
@@ -36,7 +34,6 @@
 uint8_t G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 ux_state_t G_ux;
 bolos_ux_params_t G_ux_params;
-global_ctx_t G_context;
 
 
 uint8_t g_Modal = 0;
@@ -74,7 +71,7 @@ uint32_t OnApduRcv(uint32_t lenInp)
 #pragma pack (push, 1)
     typedef struct {
         uint8_t cla;    // Instruction class
-        command_e ins;  // Instruction code
+        uint8_t ins;    // Instruction code
         uint8_t p1;     // Instruction parameter 1
         uint8_t p2;     // Instruction parameter 2
         uint8_t lc;     // Length of command data
@@ -173,17 +170,11 @@ void app_main()
     //BeamStackTest2();
     //halt();
 
-    io_init();
-
-    // Reset context
-    explicit_bzero(&G_context, sizeof(G_context));
-
     PRINTF("apdu_ptr=%x\n", G_io_apdu_buffer);
     PRINTF("apdu_len=%u\n", sizeof(G_io_apdu_buffer));
     PRINTF("uxbuf_len=%u\n", sizeof(G_io_seproxyhal_spi_buffer));
     PRINTF("gux_len=%u\n", sizeof(G_ux));
     PRINTF("gux_params_len=%u\n", sizeof(G_ux_params));
-    PRINTF("G_context_len=%u\n", sizeof(G_context));
 	PRINTF("canary_ptr=%x\n", &_stack);
 
     OnBeamInvalidRequest();
@@ -212,7 +203,6 @@ void app_main()
                 THROW(EXCEPTION_IO_RESET);
             }
             CATCH_OTHER(e) {
-                io_send_sw(e);
             }
             FINALLY {
             }

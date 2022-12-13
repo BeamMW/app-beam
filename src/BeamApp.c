@@ -23,11 +23,8 @@
 
 #include "types.h"
 #include "globals.h"
-#include "io.h"
 #include "sw.h"
 #include "ui/menu.h"
-#include "handler/get_public_key.h"
-#include "handler/sign_tx.h"
 
 #include "hw_crypto/keykeeper.h"
 #include "hw_crypto/multimac.h"

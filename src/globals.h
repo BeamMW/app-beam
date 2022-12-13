@@ -4,7 +4,6 @@
 
 #include "ux.h"
 
-#include "io.h"
 #include "types.h"
 #include "constants.h"
 
@@ -22,8 +21,3 @@ extern ux_state_t G_ux;
  * Global structure with the parameters to exchange with the BOLOS UX application.
  */
 extern bolos_ux_params_t G_ux_params;
-
-/**
- * Global context for user requests.
- */
-extern global_ctx_t G_context;
