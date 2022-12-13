@@ -37,6 +37,9 @@
 uint8_t DoModal();
 void EndModal(uint8_t res);
 
+#define c_Modal_Ok 1
+#define c_Modal_Cancel 2
+
 void DeriveAddress(const KeyKeeper* p, AddrID addrID, secp256k1_scalar* pKey, UintBig* pAddr);
 
 __attribute__((noinline))
@@ -94,11 +97,58 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
     return c_KeyKeeper_Status_Ok;
 }
 
+char Hex2Char(uint8_t x)
+{
+    return (x >= 0xa) ? (x + ('a' - 0xa)) : (x + '0');
+}
+
+void PrintHex(char* sz, const uint8_t* p, unsigned int n)
+{
+    for (unsigned int i = 0; i < n; i++)
+    {
+        uint8_t x = p[i];
+        *sz++ = Hex2Char(x >> 4);
+        *sz++ = Hex2Char(x & 0xf);
+    }
+    *sz = 0;
+}
+
+void PrintUintBig(char* sz, const UintBig* p)
+{
+    PrintHex(sz, p->m_pVal, sizeof(UintBig));
+}
+
+static char g_szLine1[sizeof(UintBig) * 2 + 1];
+
+union
+{
+    struct {
+        AddrID m_addrID;
+        const UintBig* m_pAddr;
+    } m_Addr;
+
+} g_Ux_U;
+
+//////////////////////
+// Display address
+
+UX_STEP_CB_INIT(UxStep_Address, bnnn_paging, PrintUintBig(g_szLine1, g_Ux_U.m_Addr.m_pAddr), EndModal(c_Modal_Ok), { "Your address", g_szLine1 });
+
+UX_FLOW(UxFlow_Address,
+    &UxStep_Address
+);
+
+
 void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
 {
     UNUSED(p);
-    UNUSED(addrID);
-    UNUSED(pAddr);
+
+    g_Ux_U.m_Addr.m_addrID = addrID;
+    g_Ux_U.m_Addr.m_pAddr = pAddr;
+
+    ux_flow_init(0, UxFlow_Address, NULL);
+    DoModal();
+    ui_menu_main();
 }
 
 #pragma pack (push, 1)
@@ -117,24 +167,6 @@ BeamCrypto_ProtoMethods(THE_MACRO)
 
 
 
-void OnDisplayAddr()
-{
-    PRINTF("OnDisplayAddr\n");
-}
-
-void OnDisplayAddrSelect()
-{
-    PRINTF("OnDisplayAddrSelect\n");
-    EndModal(1);
-}
-
-UX_STEP_CB_INIT(ux_menu_display_addr_step, pb, OnDisplayAddr(), OnDisplayAddrSelect(), { &C_icon_certificate, "Your address" });
-
-UX_FLOW(ux_menu_display_addr_flow,
-    &ux_menu_display_addr_step
-);
-
-
 int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t nOut)
 {
     return KeyKeeper_Invoke(p, pInOut, nIn, &nOut);
@@ -144,13 +176,10 @@ int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t 
 void OnBeamInvalidRequest()
 {
     // for fun!
+    UintBig hvAddr;
+    memset(&hvAddr, 0x2e, sizeof(hvAddr));
+    KeyKeeper_DisplayAddress(0, 12, &hvAddr);
 
-    ux_flow_init(0, ux_menu_display_addr_flow, NULL);
-
-    DoModal();
-    PRINTF("DoModal return\n");
-
-    ui_menu_main();
 /*
     {
         secp256k1_scalar tauX;
@@ -181,6 +210,10 @@ void OnBeamInvalidRequest()
 
 uint16_t OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
+    UNUSED(pBuf);
+    UNUSED(nIn);
+    UNUSED(pOut);
+
     *pOut = 0;
     return SW_OK;
 }

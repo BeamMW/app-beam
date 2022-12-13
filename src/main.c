@@ -44,6 +44,7 @@ uint8_t g_Modal = 0;
 uint8_t DoModal()
 {
     g_Modal = 0;
+    PRINTF("Modal begin\n");
 
     do
     {
@@ -54,6 +55,8 @@ uint8_t DoModal()
         io_seproxyhal_handle_event();
 
     } while (!g_Modal);
+
+    PRINTF("Modal end %u\n", (uint32_t) g_Modal);
 
     return g_Modal;
 }
@@ -79,8 +82,6 @@ uint32_t OnApduRcv(uint32_t lenInp)
     } command_t;
 #pragma pack (pop)
 
-    _Static_assert(sizeof(command_t) == 5, "");
-
     uint16_t retCode = SW_WRONG_DATA_LENGTH;
     uint32_t lenOutp = 0;
 
@@ -93,7 +94,8 @@ uint32_t OnApduRcv(uint32_t lenInp)
     {
 
         command_t* pCmd = (command_t*) G_io_apdu_buffer;
-        if (lenInp - sizeof(command_t) != pCmd->lc)
+        lenInp -= sizeof(command_t);
+        if (lenInp != pCmd->lc)
         {
             PRINTF("=> /!\\ Incorrect apdu LC: %.*H\n", lenInp, G_io_apdu_buffer);
             OnBeamInvalidRequest();
@@ -113,7 +115,17 @@ uint32_t OnApduRcv(uint32_t lenInp)
                 retCode = SW_CLA_NOT_SUPPORTED;
             else
             {
+                _Static_assert(sizeof(command_t) == 5, "");
 
+                // reorganize packet for processing. Currently we ignore p1,p2 and use ins + remaining body
+                G_io_apdu_buffer[0] = pCmd->ins;
+                memmove(G_io_apdu_buffer + 1, G_io_apdu_buffer + sizeof(command_t), lenInp);
+
+                lenOutp = sizeof(G_io_apdu_buffer);
+                retCode = OnBeamHostRequest(G_io_apdu_buffer, lenInp + 1, &lenOutp);
+
+                if (SW_OK != retCode)
+                    lenOutp = 0;
             }
         }
     }
@@ -173,6 +185,8 @@ void app_main()
     PRINTF("gux_params_len=%u\n", sizeof(G_ux_params));
     PRINTF("G_context_len=%u\n", sizeof(G_context));
 	PRINTF("canary_ptr=%x\n", &_stack);
+
+    //OnBeamInvalidRequest();
 
     for (int ioLen = 0; ; )
     {
