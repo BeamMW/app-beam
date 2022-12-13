@@ -58,6 +58,23 @@ void PrintUintBig(char* sz, const UintBig* p)
     PrintHex(sz, p->m_pVal, sizeof(UintBig));
 }
 
+void PrintUintBig_4(char* sz, const UintBig* p, uint32_t iStep)
+{
+    const uint8_t* pSrc = p->m_pVal + iStep * 8;
+
+    for (unsigned int i = 0; ; )
+    {
+        PrintHex(sz, pSrc, 2);
+        if (++i == 4)
+            break;
+
+        sz += 4;
+        pSrc += 2;
+
+        *sz++ = ' ';
+    }
+}
+
 void PrintUintBig_8(char* sz, const UintBig* p, uint32_t iStep)
 {
     const uint8_t* pSrc = p->m_pVal + iStep * 8;
@@ -173,6 +190,11 @@ union
 
 } g_Ux_U;
 
+void PrintAddr_2Line(const UintBig* pAddr, uint32_t iStep)
+{
+    PrintUintBig_4(g_szLine1, pAddr, iStep);
+    PrintUintBig_4(g_szLine2, pAddr, iStep + 1);
+}
 
 /////////////////////////////////////
 // ui About
@@ -219,16 +241,14 @@ void ui_menu_main_about()
 
 //////////////////////
 // Display address
-UX_STEP_CB_INIT(ux_step_address_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Ok), { "Your address 1/4", g_szLine1 });
-UX_STEP_CB_INIT(ux_step_address_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 1), EndModal(c_Modal_Ok), { "Your address 2/4", g_szLine1 });
-UX_STEP_CB_INIT(ux_step_address_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 2), EndModal(c_Modal_Ok), { "Your address 3/4", g_szLine1 });
-UX_STEP_CB_INIT(ux_step_address_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 3), EndModal(c_Modal_Ok), { "Your address 4/4", g_szLine1 });
+UX_STEP_CB(ux_step_address_review, bb, EndModal(c_Modal_Ok), { "Please review", "Your address" });
+UX_STEP_CB_INIT(ux_step_address_1, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
+UX_STEP_CB_INIT(ux_step_address_2, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 2), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
 
 UX_FLOW(ux_flow_address,
+    &ux_step_address_review,
     &ux_step_address_1,
-    &ux_step_address_2,
-    &ux_step_address_3,
-    &ux_step_address_4);
+    &ux_step_address_2);
 
 
 void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
@@ -246,19 +266,16 @@ void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
 
 //////////////////////
 // Confirm Spend
-//UX_STEP_CB_INIT(ux_step_send_1, bb, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Ok), { "Your address 1/4", g_szLine1 });
-UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "transaction" });
+UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "send transaction" });
 UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), { "Amount", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pUser->m_Fee), { "Fee", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_address_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 0), { "Receiver address 1/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_address_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 1), { "Receiver address 2/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_address_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 2), { "Receiver address 3/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_address_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 3), { "Receiver address 4/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 0), { "Kernel ID 1/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 1), { "Kernel ID 2/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 2), { "Kernel ID 3/4", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 3), { "Kernel ID 4/4", g_szLine1 });
+UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address" });
+UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
 
@@ -267,14 +284,12 @@ UX_FLOW(ux_flow_send,
     &ux_step_send_amount,
     &ux_step_send_asset,
     &ux_step_send_fee,
-    &ux_step_send_address_1,
-    &ux_step_send_address_2,
-    &ux_step_send_address_3,
-    &ux_step_send_address_4,
+    &ux_step_send_receiver,
+    &ux_step_send_receiver_1,
+    &ux_step_send_receiver_2,
+    &ux_step_send_krnid,
     &ux_step_send_krnid_1,
     &ux_step_send_krnid_2,
-    &ux_step_send_krnid_3,
-    &ux_step_send_krnid_4,
     &ux_step_send_Ok);
 
 int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
