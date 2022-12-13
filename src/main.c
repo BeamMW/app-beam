@@ -21,6 +21,19 @@ uint8_t G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 ux_state_t G_ux;
 bolos_ux_params_t G_ux_params;
 
+void WaitDisplayed()
+{
+    UX_WAIT_DISPLAYED();
+}
+
+void UxSingleCycle()
+{
+    io_seproxyhal_general_status();
+    // wait until a SPI packet is available
+    // NOTE: on ST31, dual wait ISO & RF (ISO instead of SPI)
+    io_seproxyhal_spi_recv(G_io_seproxyhal_spi_buffer, sizeof(G_io_seproxyhal_spi_buffer), 0);
+    io_seproxyhal_handle_event();
+}
 
 uint8_t g_Modal = 0;
 
@@ -31,11 +44,7 @@ uint8_t DoModal()
 
     do
     {
-        io_seproxyhal_general_status();
-        // wait until a SPI packet is available
-        // NOTE: on ST31, dual wait ISO & RF (ISO instead of SPI)
-        io_seproxyhal_spi_recv(G_io_seproxyhal_spi_buffer, sizeof(G_io_seproxyhal_spi_buffer), 0);
-        io_seproxyhal_handle_event();
+        UxSingleCycle();
 
     } while (!g_Modal);
 

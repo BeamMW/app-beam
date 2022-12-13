@@ -35,6 +35,8 @@ void DeriveAddress2(const KeyKeeper* p, AddrID addrID, UintBig* pAddr)
 
 /////////////////////////////////////
 // Formatting
+#define c_LineMaxLen 20
+
 char Hex2Char(uint8_t x)
 {
     return (x >= 0xa) ? (x + ('a' - 0xa)) : (x + '0');
@@ -67,12 +69,90 @@ void PrintUintBig_8(char* sz, const UintBig* p, uint32_t iStep)
     PrintHex(sz + 11, pSrc + 4, 4);
 }
 
+uint32_t Internal_Decimal_GetLen(uint32_t val)
+{
+    uint32_t len = 0;
+    for (; val; val /= 10)
+        len++;
+    return len;
+}
+
+void Internal_PrintDecimal(char* sz, uint32_t val, uint32_t len)
+{
+    for (; len--; val /= 10)
+        sz[len] = '0' + (val % 10);
+}
+
+uint32_t Internal_PrintBeams(char* sz, Amount val)
+{
+    if (val >= 1000)
+    {
+        uint32_t len = Internal_PrintBeams(sz, val / 1000); // recursion
+
+        sz[len++] = ',';
+        Internal_PrintDecimal(sz + len, (uint32_t)(val % 1000), 3);
+        return len + 3;
+    }
+
+    uint32_t len = (val >= 100) ? 3 : (val >= 10) ? 2 : 1;
+    Internal_PrintDecimal(sz, (uint32_t) val, len);
+    return len;
+}
+
+void PrintAmount(char* sz, Amount val)
+{
+    // amount format: 184,467,440,737.09551615
+    uint32_t sep = 100000000u;
+
+    // Can take up to 24 characetrs (though EXTREMELY unlikely), wherease we must fit 20 characters. In such a case the groths (after dot) would be truncated
+    uint32_t len = Internal_PrintBeams(sz, val / sep);
+    uint32_t groths = (uint32_t)(val % sep);
+    assert(len < c_LineMaxLen);
+
+    if (groths)
+    {
+        sz[len++] = '.';
+
+        while (len < c_LineMaxLen)
+        {
+            sep /= 10;
+            assert(sep && groths);
+
+            sz[len++] = '0' + (uint8_t) (groths / sep);
+
+            if (!(groths %= sep))
+                break;
+        }
+    }
+
+    sz[len] = 0;
+}
+
+void PrintAssetID(char* sz, AssetID aid)
+{
+    if (aid)
+    {
+        static const char s_szPrefix[] = "Aid-";
+        memcpy(sz, s_szPrefix, sizeof(s_szPrefix) - 1);
+        sz += sizeof(s_szPrefix) - 1;
+
+        uint32_t len = Internal_Decimal_GetLen(aid);
+        Internal_PrintDecimal(sz, aid, len);
+        sz[len] = 0;
+    }
+    else
+    {
+        static const char s_szBeam[] = "BEAM";
+        memcpy(sz, s_szBeam, sizeof(s_szBeam));
+    }
+}
 
 /////////////////////////////////////
 // State for ui elements on-demand formatting
 
-static char g_szLine1[sizeof(UintBig) + 1];
-static char g_szLine2[sizeof(UintBig) + 1];
+
+static char g_szLine1[c_LineMaxLen + 1];
+static char g_szLine2[c_LineMaxLen + 1];
 
 union
 {
@@ -80,6 +160,16 @@ union
         AddrID m_addrID;
         const UintBig* m_pAddr;
     } m_Addr;
+
+    struct {
+
+        Amount m_Amount;
+        AssetID m_Aid;
+        const UintBig* m_pAddr;
+        const TxKernelUser* m_pUser;
+        const UintBig* m_pKrnID;
+
+    } m_Spend;
 
 } g_Ux_U;
 
@@ -138,8 +228,7 @@ UX_FLOW(ux_flow_address,
     &ux_step_address_1,
     &ux_step_address_2,
     &ux_step_address_3,
-    &ux_step_address_4
-    );
+    &ux_step_address_4);
 
 
 void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
@@ -153,6 +242,71 @@ void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
     DoModal();
     ui_menu_main();
 }
+
+
+//////////////////////
+// Confirm Spend
+//UX_STEP_CB_INIT(ux_step_send_1, bb, PrintUintBig_8(g_szLine1, g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Ok), { "Your address 1/4", g_szLine1 });
+UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "transaction" });
+UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), { "Amount", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pUser->m_Fee), { "Fee", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_address_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 0), { "Receiver address 1/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_address_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 1), { "Receiver address 2/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_address_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 2), { "Receiver address 3/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_address_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pAddr, 3), { "Receiver address 4/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 0), { "Kernel ID 1/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 1), { "Kernel ID 2/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_3, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 2), { "Kernel ID 3/4", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_krnid_4, nn, PrintUintBig_8(g_szLine1, g_Ux_U.m_Spend.m_pKrnID, 3), { "Kernel ID 4/4", g_szLine1 });
+UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
+UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
+
+UX_FLOW(ux_flow_send,
+    &ux_step_send_review,
+    &ux_step_send_amount,
+    &ux_step_send_asset,
+    &ux_step_send_fee,
+    &ux_step_send_address_1,
+    &ux_step_send_address_2,
+    &ux_step_send_address_3,
+    &ux_step_send_address_4,
+    &ux_step_send_krnid_1,
+    &ux_step_send_krnid_2,
+    &ux_step_send_krnid_3,
+    &ux_step_send_krnid_4,
+    &ux_step_send_Ok);
+
+int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
+{
+    UNUSED(p);
+
+    if (!pKrnID)
+        return c_KeyKeeper_Status_Ok; // preliminary confirmation (1st invocation), always agree
+
+
+    g_Ux_U.m_Spend.m_Amount = val;
+    g_Ux_U.m_Spend.m_Aid = aid;
+    g_Ux_U.m_Spend.m_pAddr = pPeerID;
+    g_Ux_U.m_Spend.m_pUser = pUser;
+    g_Ux_U.m_Spend.m_pKrnID = pKrnID;
+
+
+    ux_flow_init(0, ux_flow_send, NULL);
+    uint8_t res = DoModal();
+    ui_menu_main();
+
+    return (c_Modal_Ok == res) ? c_KeyKeeper_Status_Ok : c_KeyKeeper_Status_UserAbort;
+}
+
+
+
+//////////////////////
+// progr
+UX_STEP_NOCB(ux_step_progr, nn, { "Your address 1/4", g_szLine2 });
+
+UX_FLOW(ux_flow_progr,
+    &ux_step_progr);
 
 
 void ui_menu_initial()
@@ -351,17 +505,6 @@ int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
     return 1;
 }
 
-int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
-{
-    UNUSED(p);
-    UNUSED(val);
-    UNUSED(aid);
-    UNUSED(pPeerID);
-    UNUSED(pUser);
-    UNUSED(pKrnID);
-
-    return c_KeyKeeper_Status_Ok;
-}
 
 
 
