@@ -15,20 +15,9 @@
  *  limitations under the License.
  *****************************************************************************/
 
-#include <stdint.h>  // uint*_t
-#include <string.h>  // memset, explicit_bzero
-#include <assert.h>
-
-#include "os.h"
-#include "ux.h"
-#include "os_io_seproxyhal.h"
-
-#include "types.h"
-#include "globals.h"
-#include "sw.h"
-#include "ui/menu.h"
-
 #include "BeamApp.h"
+#include "os_io_seproxyhal.h"
+#include "sw.h"
 #include "hw_crypto/byteorder.h"
 
 uint8_t G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
@@ -108,7 +97,7 @@ uint32_t OnApduRcv(uint32_t lenInp)
                 pCmd->lc,
                 pCmd->data);
 
-            if (pCmd->cla != CLA)
+            if (pCmd->cla != 0xE0) // CLA
                 retCode = SW_CLA_NOT_SUPPORTED;
             else
             {
