@@ -29,8 +29,6 @@
 #include "constants.h"
 #include "../globals.h"
 #include "../sw.h"
-#include "../common/bip32.h"
-#include "../common/format.h"
 
 static action_validate_cb g_validate_callback;
 static char g_amount[30];
