@@ -23,6 +23,8 @@ bolos_ux_params_t G_ux_params;
 
 void WaitDisplayed()
 {
+    UX_WAKE_UP()
+    UX_REDISPLAY();
     UX_WAIT_DISPLAYED();
 }
 

@@ -100,6 +100,14 @@ void Internal_PrintDecimal(char* sz, uint32_t val, uint32_t len)
         sz[len] = '0' + (val % 10);
 }
 
+uint32_t PrintDecimalAuto(char* sz, uint32_t val)
+{
+    uint32_t len = Internal_Decimal_GetLen(val);
+    Internal_PrintDecimal(sz, val, len);
+    sz[len] = 0;
+    return len;
+}
+
 uint32_t Internal_PrintBeams(char* sz, Amount val)
 {
     if (val >= 1000)
@@ -153,9 +161,7 @@ void PrintAssetID(char* sz, AssetID aid)
         memcpy(sz, s_szPrefix, sizeof(s_szPrefix) - 1);
         sz += sizeof(s_szPrefix) - 1;
 
-        uint32_t len = Internal_Decimal_GetLen(aid);
-        Internal_PrintDecimal(sz, aid, len);
-        sz[len] = 0;
+        PrintDecimalAuto(sz, aid);
     }
     else
     {
