@@ -30,6 +30,9 @@
 #include "secp256k1/src/group.h"
 #include "secp256k1/src/hash.h"
 
+typedef secp256k1_sha256 secp256k1_sha256_t;
+typedef secp256k1_hmac_sha256 secp256k1_hmac_sha256_t;
+
 #if defined(__clang__) || defined(__GNUC__) || defined(__GNUG__)
 #	pragma GCC diagnostic pop
 #else

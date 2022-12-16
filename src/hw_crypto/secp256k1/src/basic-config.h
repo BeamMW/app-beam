@@ -3,30 +3,13 @@
  * Distributed under the MIT software license, see the accompanying   *
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
  **********************************************************************/
+#pragma once
 
-#ifndef _SECP256K1_BASIC_CONFIG_
-#define _SECP256K1_BASIC_CONFIG_
+#define SECP256K1_WIDEMUL_INT64 1
+//#define SECP256K1_WIDEMUL_INT128 1
+//#define SECP256K1_INT128_NATIVE 1
+//#define SECP256K1_INT128_STRUCT 1
+//#define USE_EXTERNAL_ASM 1
 
-#ifdef USE_BASIC_CONFIG
-
-#undef USE_ASM_X86_64
-#undef USE_ENDOMORPHISM
-#undef USE_FIELD_10X26
-#undef USE_FIELD_5X52
-#undef USE_FIELD_INV_BUILTIN
-#undef USE_FIELD_INV_NUM
-#undef USE_NUM_GMP
-#undef USE_NUM_NONE
-#undef USE_SCALAR_4X64
-#undef USE_SCALAR_8X32
-#undef USE_SCALAR_INV_BUILTIN
-#undef USE_SCALAR_INV_NUM
-
-#define USE_NUM_NONE 1
-#define USE_FIELD_INV_BUILTIN 1
-#define USE_SCALAR_INV_BUILTIN 1
-#define USE_FIELD_10X26 1
-#define USE_SCALAR_8X32 1
-
-#endif // USE_BASIC_CONFIG
-#endif // _SECP256K1_BASIC_CONFIG_
+//typedef __int128 int128_t;
+//typedef unsigned __int128 uint128_t;
