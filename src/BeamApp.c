@@ -675,7 +675,7 @@ void BeamStackTest1()
             secp256k1_gej gej;
 
             struct {
-                MultiMac_Fast_Custom aGen;
+                secp256k1_ge_storage m_pPt[c_MultiMac_OddCount(c_MultiMac_nBits_Custom)];
                 secp256k1_fe zDenom;
             } aGen;
 
@@ -723,14 +723,15 @@ void BeamStackTest1()
     memset(&u.p2.mmCtx, 0, sizeof(u.p2.mmCtx));
 
     u.p2.mmCtx.m_pRes = &u.p2.gej;
-    u.p2.mmCtx.m_Secure = 1;
-    u.p2.mmCtx.m_pSecureK = &u.p2.s1;
-    u.p2.mmCtx.m_pGenSecure = Context_get()->m_pGenGJ;
-    u.p2.mmCtx.m_Fast = 1;
-    u.p2.mmCtx.m_pFastK = &u.p2.s2;
-    u.p2.mmCtx.m_pWnaf = &u.p2.wnaf;
-    u.p2.mmCtx.m_FastGen.m_pPrecomputed = Context_get()->m_pGenFast + c_MultiMac_Fast_Idx_H;
-    u.p2.mmCtx.m_pZDenom = 0;
+    u.p2.mmCtx.m_Secure.m_Count = 1;
+    u.p2.mmCtx.m_Secure.m_pK = &u.p2.s1;
+    u.p2.mmCtx.m_Secure.m_pGen = Context_get()->m_pGenGJ;
+    u.p2.mmCtx.m_Fast.m_Count = 1;
+    u.p2.mmCtx.m_Fast.m_pK = &u.p2.s2;
+    u.p2.mmCtx.m_Fast.m_pWnaf = &u.p2.wnaf;
+    u.p2.mmCtx.m_Fast.m_pGen0 = Context_get()->m_pGenH;
+    u.p2.mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_H;
+    u.p2.mmCtx.m_Fast.m_pZDenom = 0;
 
     MultiMac_Calculate(&u.p2.mmCtx);
 

@@ -111,8 +111,9 @@ inline static secp256k1_scalar_uint BitWalker_xor(const BitWalker* p, secp256k1_
 }
 
 #define c_WNaf_Invalid 0x80
-static_assert((c_MultiMac_Fast_Precomputed_nCount * 2) < c_WNaf_Invalid, "");
-static_assert((c_MultiMac_Fast_Custom_nCount * 2) < c_WNaf_Invalid, "");
+static_assert((c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof) * 2) < c_WNaf_Invalid, "");
+static_assert((c_MultiMac_OddCount(c_MultiMac_nBits_H) * 2) < c_WNaf_Invalid, "");
+static_assert((c_MultiMac_OddCount(c_MultiMac_nBits_Custom) * 2) < c_WNaf_Invalid, "");
 
 inline static void WNaf_Cursor_SetInvalid(MultiMac_WNaf* p)
 {
@@ -242,8 +243,11 @@ void mem_cmov(unsigned int* pDst, const unsigned int* pSrc, int flag, unsigned i
 
 static void MultiMac_Calculate_LoadFast(const MultiMac_Context* p, secp256k1_ge* pGe, unsigned int iGen, unsigned int iElem)
 {
-	const secp256k1_ge_storage* pPts = p->m_pZDenom ? p->m_FastGen.m_pCustom[iGen].m_pPt : p->m_FastGen.m_pPrecomputed[iGen].m_pPt;
-	secp256k1_ge_from_storage(pGe, pPts + iElem);
+	unsigned int nPitch = c_MultiMac_OddCount(p->m_Fast.m_WndBits);
+	assert(iElem < nPitch);
+
+	unsigned int n = nPitch * iGen + iElem;
+	secp256k1_ge_from_storage(pGe, p->m_Fast.m_pGen0 + n);
 }
 
 __stack_hungry__
@@ -283,18 +287,22 @@ static void wrap_gej_double_var(secp256k1_gej* r, const secp256k1_gej* a/*, secp
 }
 
 __stack_hungry__
-static void MultiMac_Calculate_PrePhase(const MultiMac_Context* p)
+static void MultiMac_Calculate_PrePhase(MultiMac_Context* const p)
 {
 	secp256k1_gej_set_infinity(p->m_pRes);
 
-	unsigned int nMaxWnd = p->m_pZDenom ? c_MultiMac_Fast_Custom_nBits : c_MultiMac_Fast_Precomputed_nBits;
-
-	for (unsigned int i = 0; i < p->m_Fast; i++)
+	if (!p->m_Fast.m_Count)
 	{
-		MultiMac_WNaf* pWnaf = p->m_pWnaf + i;
-		secp256k1_scalar* pS = p->m_pFastK + i;
+		p->m_Fast.m_pZDenom = 0;
+		return;
+	}
 
-		int carry = WNaf_Cursor_Init(pWnaf, pS, nMaxWnd);
+	for (unsigned int i = 0; i < p->m_Fast.m_Count; i++)
+	{
+		MultiMac_WNaf* pWnaf = p->m_Fast.m_pWnaf + i;
+		secp256k1_scalar* pS = p->m_Fast.m_pK + i;
+
+		int carry = WNaf_Cursor_Init(pWnaf, pS, p->m_Fast.m_WndBits);
 		if (carry)
 		{
 			secp256k1_ge ge;
@@ -330,21 +338,21 @@ static void MultiMac_Calculate_SecureBit(const MultiMac_Context* p, unsigned int
 {
 	secp256k1_ge ge;
 
-	static_assert(!(secp256k1_scalar_WordBits % c_MultiMac_Secure_nBits), "");
+	static_assert(!(secp256k1_scalar_WordBits % c_MultiMac_nBits_Secure), "");
 
 	unsigned int iWord = iBit / secp256k1_scalar_WordBits;
 	unsigned int nShift = iBit % secp256k1_scalar_WordBits;
-	const secp256k1_scalar_uint nMsk = ((1U << c_MultiMac_Secure_nBits) - 1);
+	const secp256k1_scalar_uint nMsk = ((1U << c_MultiMac_nBits_Secure) - 1);
 
-	for (unsigned int i = 0; i < p->m_Secure; i++)
+	for (unsigned int i = 0; i < p->m_Secure.m_Count; i++)
 	{
-		unsigned int iElement = (p->m_pSecureK[i].d[iWord] >> nShift) & nMsk;
-		const MultiMac_Secure* pGen = p->m_pGenSecure + i;
+		unsigned int iElement = (p->m_Secure.m_pK[i].d[iWord] >> nShift) & nMsk;
+		const MultiMac_Secure* pGen = p->m_Secure.m_pGen + i;
 
 		MultiMac_Calculate_Secure_Read(&ge, pGen, iElement);
 
-		if (p->m_pZDenom)
-			wrap_gej_add_zinv_var(p->m_pRes, p->m_pRes, &ge, p->m_pZDenom);
+		if (p->m_Fast.m_pZDenom)
+			wrap_gej_add_zinv_var(p->m_pRes, p->m_pRes, &ge, p->m_Fast.m_pZDenom);
 		else
 			wrap_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge);
 	}
@@ -353,14 +361,14 @@ static void MultiMac_Calculate_SecureBit(const MultiMac_Context* p, unsigned int
 __stack_hungry__
 static void MultiMac_Calculate_FastBit(const MultiMac_Context* p, unsigned int iBit)
 {
-	unsigned int nMaxWnd = p->m_pZDenom ? c_MultiMac_Fast_Custom_nBits : c_MultiMac_Fast_Precomputed_nBits;
+	unsigned int nMaxWnd = p->m_Fast.m_WndBits;
 	unsigned int nMaxElements = c_MultiMac_OddCount(nMaxWnd);
 
-	for (unsigned int i = 0; i < p->m_Fast; i++)
+	for (unsigned int i = 0; i < p->m_Fast.m_Count; i++)
 	{
-		MultiMac_WNaf* pWnaf = p->m_pWnaf + i;
+		MultiMac_WNaf* pWnaf = p->m_Fast.m_pWnaf + i;
 
-		if (((uint8_t)iBit) != pWnaf->m_iBit)
+		if (((uint8_t) iBit) != pWnaf->m_iBit)
 			continue;
 
 		unsigned int iElem = pWnaf->m_iElement;
@@ -383,28 +391,28 @@ static void MultiMac_Calculate_FastBit(const MultiMac_Context* p, unsigned int i
 
 		wrap_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge);
 
-		WNaf_Cursor_MoveNext(pWnaf, p->m_pFastK + i, nMaxWnd);
+		WNaf_Cursor_MoveNext(pWnaf, p->m_Fast.m_pK + i, nMaxWnd);
 	}
 }
 
 __stack_hungry__
 static void MultiMac_Calculate_PostPhase(const MultiMac_Context* p)
 {
-	if (p->m_pZDenom)
+	if (p->m_Fast.m_pZDenom)
 		// fix denominator
-		secp256k1_fe_mul(&p->m_pRes->z, &p->m_pRes->z, p->m_pZDenom);
+		secp256k1_fe_mul(&p->m_pRes->z, &p->m_pRes->z, p->m_Fast.m_pZDenom);
 
-	for (unsigned int i = 0; i < p->m_Secure; i++)
+	for (unsigned int i = 0; i < p->m_Secure.m_Count; i++)
 	{
 		secp256k1_ge ge;
-		secp256k1_ge_from_storage(&ge, p->m_pGenSecure[i].m_pPt + c_MultiMac_Secure_nCount);
+		secp256k1_ge_from_storage(&ge, p->m_Secure.m_pGen[i].m_pPt + c_MultiMac_Secure_nCount);
 		wrap_gej_add_ge_var(p->m_pRes, p->m_pRes, &ge);
 	}
 
 }
 
 __stack_hungry__
-void MultiMac_Calculate(const MultiMac_Context* p)
+void MultiMac_Calculate(MultiMac_Context* p)
 {
 	MultiMac_Calculate_PrePhase(p);
 
@@ -412,7 +420,7 @@ void MultiMac_Calculate(const MultiMac_Context* p)
 	{
 		wrap_gej_double_var(p->m_pRes, p->m_pRes); // would be fast if zero, no need to check explicitly
 
-		if (!(iBit % c_MultiMac_Secure_nBits) && p->m_Secure)
+		if (!(iBit % c_MultiMac_nBits_Secure) && p->m_Secure.m_Count)
 			MultiMac_Calculate_SecureBit(p, iBit);
 
 		MultiMac_Calculate_FastBit(p, iBit);
@@ -514,8 +522,9 @@ void Point_Gej_2_Normalize(secp256k1_gej* pGej)
 	Point_Gej_BatchRescale(pGej, _countof(pBuf), pBuf, &zDenom, 1);
 }
 
-typedef struct {
-	MultiMac_Fast_Custom m_Gen;
+typedef struct
+{
+	secp256k1_ge_storage m_pPt[c_MultiMac_OddCount(c_MultiMac_nBits_Custom)]; // odd powers
 	secp256k1_fe m_zDenom;
 } CustomGenerator;
 
@@ -525,25 +534,25 @@ void MultiMac_Fast_Custom_Init(CustomGenerator* p, const secp256k1_ge* pGe)
 	assert(!secp256k1_ge_is_infinity(pGe));
 
 	// calculate odd powers
-	secp256k1_gej pOdds[c_MultiMac_Fast_Custom_nCount];
+	secp256k1_gej pOdds[_countof(p->m_pPt)];
 	Point_Gej_from_Ge(pOdds, pGe);
 
-	secp256k1_gej* const pX2 = (secp256k1_gej *) &p->m_Gen; // reuse its mem!
+	secp256k1_gej* const pX2 = (secp256k1_gej *) p->m_pPt; // reuse its mem!
 	wrap_gej_double_var(pX2, pOdds);
 
-	for (unsigned int i = 1; i < c_MultiMac_Fast_Custom_nCount; i++)
+	for (unsigned int i = 1; i < _countof(pOdds); i++)
 	{
 		wrap_gej_add_var(pOdds + i, pOdds + i - 1, pX2);
 		assert(!secp256k1_gej_is_infinity(pOdds + i)); // odd powers of non-zero point must not be zero!
 	}
 
 	// to common denominator
-	static_assert(sizeof(secp256k1_fe) * c_MultiMac_Fast_Custom_nCount <= sizeof(p->m_Gen), "Need this to temporary use its memory");
+	static_assert(sizeof(secp256k1_fe) * _countof(pOdds) <= sizeof(p->m_pPt), "Need this to temporary use its memory");
 
-	Point_Gej_BatchRescale(pOdds, c_MultiMac_Fast_Custom_nCount, (secp256k1_fe*) &p->m_Gen, &p->m_zDenom, 0);
+	Point_Gej_BatchRescale(pOdds, _countof(pOdds), (secp256k1_fe*) &p->m_pPt, &p->m_zDenom, 0);
 
-	for (unsigned int i = 0; i < c_MultiMac_Fast_Custom_nCount; i++)
-		secp256k1_ge_to_storage(p->m_Gen.m_pPt + i, (secp256k1_ge*) (pOdds + i));
+	for (unsigned int i = 0; i < _countof(pOdds); i++)
+		secp256k1_ge_to_storage(p->m_pPt + i, (secp256k1_ge*) (pOdds + i));
 }
 
 //////////////////////////////
@@ -701,11 +710,10 @@ void MulPoint(secp256k1_gej* pGej, const MultiMac_Secure* pGen, const secp256k1_
 {
 	MultiMac_Context ctx;
 	ctx.m_pRes = pGej;
-	ctx.m_pZDenom = 0;
-	ctx.m_Fast = 0;
-	ctx.m_Secure = 1;
-	ctx.m_pGenSecure = pGen;
-	ctx.m_pSecureK = pK;
+	ctx.m_Fast.m_Count = 0;
+	ctx.m_Secure.m_Count = 1;
+	ctx.m_Secure.m_pGen = pGen;
+	ctx.m_Secure.m_pK = pK;
 
 	MultiMac_Calculate(&ctx);
 }
@@ -1045,22 +1053,24 @@ void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, con
 	// sk*G + v*H
 	MultiMac_Context mmCtx;
 	mmCtx.m_pRes = pGej;
-	mmCtx.m_Secure = 1;
-	mmCtx.m_pSecureK = pkG;
-	mmCtx.m_pGenSecure = pCtx->m_pGenGJ;
-	mmCtx.m_Fast = 1;
-	mmCtx.m_pFastK = pkH;
-	mmCtx.m_pWnaf = &wnaf;
+	mmCtx.m_Secure.m_Count = 1;
+	mmCtx.m_Secure.m_pK = pkG;
+	mmCtx.m_Secure.m_pGen = pCtx->m_pGenGJ;
+	mmCtx.m_Fast.m_Count = 1;
+	mmCtx.m_Fast.m_pK = pkH;
+	mmCtx.m_Fast.m_pWnaf = &wnaf;
 
 	if (pAGen)
 	{
-		mmCtx.m_FastGen.m_pCustom = &pAGen->m_Gen;
-		mmCtx.m_pZDenom = &pAGen->m_zDenom;
+		mmCtx.m_Fast.m_pGen0 = pAGen->m_pPt;
+		mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_Custom;
+		mmCtx.m_Fast.m_pZDenom = &pAGen->m_zDenom;
 	}
 	else
 	{
-		mmCtx.m_FastGen.m_pPrecomputed = pCtx->m_pGenFast + c_MultiMac_Fast_Idx_H;
-		mmCtx.m_pZDenom = 0;
+		mmCtx.m_Fast.m_pGen0 = pCtx->m_pGenH;
+		mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_H;
+		mmCtx.m_Fast.m_pZDenom = 0;
 	}
 
 	MultiMac_Calculate(&mmCtx);
@@ -1270,20 +1280,28 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 	NonceGenerator_NextScalar(&pWrk->m_NonceGen, pRho);
 
 	MultiMac_Context mmCtx;
-	mmCtx.m_pZDenom = 0;
 
-	mmCtx.m_Secure = 1;
-	mmCtx.m_pSecureK = pRho;
-	mmCtx.m_pGenSecure = Context_get()->m_pGenGJ;
+	mmCtx.m_Secure.m_Count = 1;
+	mmCtx.m_Secure.m_pK = pRho;
+	mmCtx.m_Secure.m_pGen = Context_get()->m_pGenGJ;
 
-	mmCtx.m_Fast = 0;
-	mmCtx.m_FastGen.m_pPrecomputed = Context_get()->m_pGenFast;
-	mmCtx.m_pFastK = pS;
-	mmCtx.m_pWnaf = pWnaf;
+	mmCtx.m_Fast.m_pZDenom = 0;
+	mmCtx.m_Fast.m_Count = 0;
+	mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_Rangeproof;
+	mmCtx.m_Fast.m_pK = pS;
+	mmCtx.m_Fast.m_pWnaf = pWnaf;
 
-	for (unsigned int iBit = 0; iBit < nDims * 2; iBit++, mmCtx.m_Fast++)
+#ifdef BeamCrypto_SlowLoad
+	secp256k1_ge_storage pGen[Calc_S_Naggle][c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof)];
+	memcpy(pGen, Context_get()->m_pGenRangeproof, sizeof(pGen));
+	mmCtx.m_Fast.m_pGen0 = pGen[0];
+#else // BeamCrypto_SlowLoad
+	mmCtx.m_Fast.m_pGen0 = Context_get()->m_pGenRangeproof[0];
+#endif // BeamCrypto_SlowLoad
+
+	for (unsigned int iBit = 0; iBit < nDims * 2; iBit++, mmCtx.m_Fast.m_Count++)
 	{
-		if (Calc_S_Naggle == mmCtx.m_Fast)
+		if (Calc_S_Naggle == mmCtx.m_Fast.m_Count)
 		{
 			// flush
 			mmCtx.m_pRes = pWrk->m_pGej + (iBit != Calc_S_Naggle); // 1st flush goes to pGej[0] directly
@@ -1292,16 +1310,23 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 			if (iBit != Calc_S_Naggle)
 				wrap_gej_add_var(pWrk->m_pGej, pWrk->m_pGej + 1, pWrk->m_pGej);
 
-			mmCtx.m_Secure = 0;
-			mmCtx.m_Fast = 0;
-			mmCtx.m_FastGen.m_pPrecomputed += Calc_S_Naggle;
+			mmCtx.m_Secure.m_Count = 0;
+			mmCtx.m_Fast.m_Count = 0;
+
+#ifdef BeamCrypto_SlowLoad
+			uint32_t nRemaining = min(Calc_S_Naggle, (nDims * 2 - iBit));
+			memcpy(pGen, Context_get()->m_pGenRangeproof + iBit, sizeof(pGen[0]) * nRemaining);
+#else // BeamCrypto_SlowLoad
+			mmCtx.m_Fast.m_pGen0 += Calc_S_Naggle * c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof);
+#endif // BeamCrypto_SlowLoad
+
 		}
 
-		NonceGenerator_NextScalar(&pWrk->m_NonceGen, pS + mmCtx.m_Fast);
+		NonceGenerator_NextScalar(&pWrk->m_NonceGen, pS + mmCtx.m_Fast.m_Count);
 
 		if (!(iBit % nDims) && p->m_pKExtra)
 			// embed more info
-			wrap_scalar_add(pS + mmCtx.m_Fast, pS + mmCtx.m_Fast, p->m_pKExtra + (iBit / nDims));
+			wrap_scalar_add(pS + mmCtx.m_Fast.m_Count, pS + mmCtx.m_Fast.m_Count, p->m_pKExtra + (iBit / nDims));
 	}
 
 	mmCtx.m_pRes = pWrk->m_pGej + 1;
@@ -1317,10 +1342,10 @@ static void RangeProof_Calculate_A_Bits(secp256k1_gej* pRes, secp256k1_ge* pGeTm
 	for (uint32_t i = 0; i < nDims; i++)
 	{
 		if (1 & (v >> i))
-			secp256k1_ge_from_storage(pGeTmp, pCtx->m_pGenFast[i].m_pPt);
+			secp256k1_ge_from_storage(pGeTmp, pCtx->m_pGenRangeproof[i]);
 		else
 		{
-			secp256k1_ge_from_storage(pGeTmp, pCtx->m_pGenFast[nDims + i].m_pPt);
+			secp256k1_ge_from_storage(pGeTmp, pCtx->m_pGenRangeproof[nDims + i]);
 			secp256k1_ge_neg(pGeTmp, pGeTmp);
 		}
 
@@ -1769,24 +1794,21 @@ static int Signature_IsValid_Internal(const Signature* p, const UintBig* pMsg, c
 
 	MultiMac_Context ctx;
 	ctx.m_pRes = &gej;
-	ctx.m_Secure = 1;
-	ctx.m_pGenSecure = Context_get()->m_pGenGJ;
-	ctx.m_pSecureK = &u.p1.k;
+	ctx.m_Secure.m_Count = 1;
+	ctx.m_Secure.m_pGen = Context_get()->m_pGenGJ;
+	ctx.m_Secure.m_pK = &u.p1.k;
 
 	if (!pPkGen)
-	{
 		// unlikely, but allowed for historical reasons
-		ctx.m_Fast = 0;
-		ctx.m_pZDenom = 0;
-	}
+		ctx.m_Fast.m_Count = 0;
 	else
 	{
-
-		ctx.m_pZDenom = &pPkGen->m_zDenom;
-		ctx.m_Fast = 1;
-		ctx.m_FastGen.m_pCustom = &pPkGen->m_Gen;
-		ctx.m_pFastK = &u.p1.s;
-		ctx.m_pWnaf = &u.p1.wnaf;
+		ctx.m_Fast.m_Count = 1;
+		ctx.m_Fast.m_pZDenom = &pPkGen->m_zDenom;
+		ctx.m_Fast.m_pGen0 = pPkGen->m_pPt;
+		ctx.m_Fast.m_WndBits = c_MultiMac_nBits_Custom;
+		ctx.m_Fast.m_pK = &u.p1.s;
+		ctx.m_Fast.m_pWnaf = &u.p1.wnaf;
 
 		Signature_GetChallenge(p, pMsg, &u.p1.s);
 	}
@@ -2841,11 +2863,10 @@ static void MulGJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
 {
 	MultiMac_Context ctx;
 	ctx.m_pRes = pGej;
-	ctx.m_pZDenom = 0;
-	ctx.m_Fast = 0;
-	ctx.m_Secure = 2;
-	ctx.m_pGenSecure = Context_get()->m_pGenGJ;
-	ctx.m_pSecureK = pK;
+	ctx.m_Fast.m_Count = 0;
+	ctx.m_Secure.m_Count = 2;
+	ctx.m_Secure.m_pGen = Context_get()->m_pGenGJ;
+	ctx.m_Secure.m_pK = pK;
 
 	MultiMac_Calculate(&ctx);
 }

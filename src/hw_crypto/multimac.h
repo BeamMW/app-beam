@@ -15,29 +15,24 @@
 #pragma once
 #include "ecc_decl.h"
 
-#define c_MultiMac_Fast_Precomputed_nBits 4 // effectively it'd be 1 bit more, because we both add and subtract (i.e. interleave)
-#define c_MultiMac_Secure_nBits 4
-#define c_MultiMac_Secure_nCount (1 << c_MultiMac_Secure_nBits)
+#ifdef BeamCrypto_SlowLoad
+#	define c_MultiMac_nBits_Rangeproof 2
+#else // BeamCrypto_SlowLoad
+#	define c_MultiMac_nBits_Rangeproof 4
+#endif // BeamCrypto_SlowLoad
+
+#define c_MultiMac_nBits_H 4
+#define c_MultiMac_nBits_Secure 4
+#define c_MultiMac_Secure_nCount (1 << c_MultiMac_nBits_Secure)
 
 #ifdef BeamCrypto_ScarceStack
-#	define c_MultiMac_Fast_Custom_nBits 3
+#	define c_MultiMac_nBits_Custom 3
 #else
-#	define c_MultiMac_Fast_Custom_nBits 4
+#	define c_MultiMac_nBits_Custom 4
 #endif // BeamCrypto_ScarceStack
 
 #define c_MultiMac_OddCount(numBits) (1 << ((numBits) - 1))
 
-#define c_MultiMac_Fast_Precomputed_nCount c_MultiMac_OddCount(c_MultiMac_Fast_Precomputed_nBits)
-#define c_MultiMac_Fast_Custom_nCount c_MultiMac_OddCount(c_MultiMac_Fast_Custom_nBits)
-
-
-typedef struct {
-	secp256k1_ge_storage m_pPt[c_MultiMac_Fast_Precomputed_nCount]; // odd powers
-} MultiMac_Fast_Precomputed;
-
-typedef struct {
-	secp256k1_ge_storage m_pPt[c_MultiMac_Fast_Custom_nCount]; // odd powers
-} MultiMac_Fast_Custom;
 
 typedef struct {
 	secp256k1_ge_storage m_pPt[c_MultiMac_Secure_nCount + 1]; // the last is the compensation term
@@ -52,33 +47,35 @@ typedef struct
 {
 	secp256k1_gej* m_pRes;
 
-	unsigned int m_Fast;
-	unsigned int m_Secure;
+	struct
+	{
+		unsigned int m_Count;
+		unsigned int m_WndBits;
+		const secp256k1_ge_storage* m_pGen0;
+		secp256k1_scalar* m_pK; // would be modified during calculation, value won't be preserved
+		MultiMac_WNaf* m_pWnaf;
+		const secp256k1_fe* m_pZDenom; // optional common z-denominator of 'fast' custom generators.
 
-	union {
-		const MultiMac_Fast_Precomputed* m_pPrecomputed;
-		const MultiMac_Fast_Custom* m_pCustom;
-	} m_FastGen;
+	} m_Fast;
 
-	secp256k1_scalar* m_pFastK; // would be modified during calculation, value won't be preserved
-	MultiMac_WNaf* m_pWnaf;
+	struct
+	{
+		unsigned int m_Count;
+		const MultiMac_Secure* m_pGen;
+		const secp256k1_scalar* m_pK;
 
-	const MultiMac_Secure* m_pGenSecure;
-	const secp256k1_scalar* m_pSecureK;
-
-	const secp256k1_fe* m_pZDenom; // optional common z-denominator of 'fast' custom generators.
-	// If specified - assuming custom generators, otherwise - precomputed
+	} m_Secure;
 
 } MultiMac_Context;
 
-void MultiMac_Calculate(const MultiMac_Context*);
+void MultiMac_Calculate(MultiMac_Context*);
 
 #define c_MultiMac_Fast_nGenerators (sizeof(uint64_t) * 8 * 2)
-#define c_MultiMac_Fast_Idx_H c_MultiMac_Fast_nGenerators
 
 typedef struct
 {
-	MultiMac_Fast_Precomputed m_pGenFast[c_MultiMac_Fast_Idx_H + 1];
+	secp256k1_ge_storage m_pGenRangeproof[c_MultiMac_Fast_nGenerators][c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof)];
+	secp256k1_ge_storage m_pGenH[c_MultiMac_OddCount(c_MultiMac_nBits_H)];
 	MultiMac_Secure m_pGenGJ[2];
 
 } Context;
