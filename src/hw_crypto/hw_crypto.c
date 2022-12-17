@@ -1274,8 +1274,8 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 	secp256k1_scalar pS[Calc_S_Naggle];
 	MultiMac_WNaf pWnaf[Calc_S_Naggle];
 
-	secp256k1_scalar* const pRho = (secp256k1_scalar*) pWrk->m_pGej; // reuse its mem
-	// our 1st calculation (either with full or partial naggling) would be into pWrk->m_pGej + 1
+	secp256k1_scalar* const pRho = (secp256k1_scalar*) (pWrk->m_pGej + (Calc_S_Naggle < Calc_S_Naggle_Max)); // reuse its mem
+	// depending on naggling, the 1st point would be either pGej o pGej+1, hence we may use the other one
 
 	NonceGenerator_NextScalar(&pWrk->m_NonceGen, pRho);
 
