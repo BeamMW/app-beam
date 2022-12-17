@@ -250,22 +250,27 @@ static void MultiMac_Calculate_LoadFast(const MultiMac_Context* p, secp256k1_ge*
 	secp256k1_ge_from_storage(pGe, p->m_Fast.m_pGen0 + n);
 }
 
+void OnEccPointAdd();
+
 __stack_hungry__
 static void wrap_gej_add_ge_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_ge_var(r, a, b, 0 /* rzr */);
+	OnEccPointAdd();
 }
 
 __stack_hungry__
 static void wrap_gej_add_zinv_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b, const secp256k1_fe* bzinv)
 {
 	secp256k1_gej_add_zinv_var(r, a, b, bzinv);
+	OnEccPointAdd();
 }
 
 __stack_hungry__
 static void wrap_gej_add_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_gej* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_var(r, a, b, 0 /* rzr */);
+	OnEccPointAdd();
 }
 
 __stack_hungry__

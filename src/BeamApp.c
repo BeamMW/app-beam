@@ -334,11 +334,31 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
 
 //////////////////////
 // progr
-UX_STEP_NOCB(ux_step_progr, nn, { "Your address 1/4", g_szLine2 });
+UX_STEP_NOCB(ux_step_progr, nn, { "Total added", g_szLine1 });
 
 UX_FLOW(ux_flow_progr,
     &ux_step_progr);
 
+uint32_t g_EccAdded = 0;
+
+void WaitDisplayed();
+
+void UpdProgr()
+{
+    PrintDecimalAuto(g_szLine1, g_EccAdded);
+
+    ux_flow_init(0, ux_flow_progr, NULL);
+    WaitDisplayed();
+}
+
+__attribute__((noinline))
+void OnEccPointAdd()
+{
+    g_EccAdded++;
+
+    if (!(g_EccAdded % 500))
+        UpdProgr();
+}
 
 void ui_menu_initial()
 {
@@ -346,22 +366,12 @@ void ui_menu_initial()
     if (!G_ux.stack_count)
         ux_stack_push();
 
-    //ui_menu_main();
+    UpdProgr();
 
-    {
-        KeyKeeper kk;
-        UintBig hv;
-
-        memset(&hv, 0, sizeof(hv));
-        Kdf_Init(&kk.m_MasterKey, &hv);
-
-        DeriveAddress2(&kk, 16, &hv);
-
-        KeyKeeper_DisplayAddress(&kk, 16, &hv);
-    }
-
+    void OnSomeDemo();
+    OnSomeDemo();
+    ui_menu_main();
 }
-
 
 
 /*
@@ -567,24 +577,19 @@ int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t 
 
 void OnSomeDemo()
 {
-    typedef struct {
-        KeyKeeper kk;
-        UintBig hv;
-        CompactPoint pPt[2];
-    } Ctx;
+    KeyKeeper kk;
+    UintBig hv;
+    CompactPoint pPt[2];
 
-    Ctx* pCtx = (Ctx*) G_io_apdu_buffer;
 
     // for fun!
-    memset(pCtx, 0, sizeof(*pCtx));
-
-    memset(&pCtx->hv, 0x11, sizeof(pCtx->hv));
-    Kdf_Init(&pCtx->kk.m_MasterKey, &pCtx->hv);
+    memset(&hv, 0x11, sizeof(hv));
+    Kdf_Init(&kk.m_MasterKey, &hv);
 
     RangeProof rp;
     memset(&rp, 0, sizeof(rp));
 
-    rp.m_pKdf = &pCtx->kk.m_MasterKey;
+    rp.m_pKdf = &kk.m_MasterKey;
 
     rp.m_Cid.m_Amount = 400000;
     rp.m_Cid.m_Idx = 15;
@@ -593,42 +598,15 @@ void OnSomeDemo()
     rp.m_Cid.m_Amount = 4500000000ull;
     rp.m_Cid.m_AssetID = 0;
 
-    rp.m_pT_In = pCtx->pPt;
-    rp.m_pT_Out = pCtx->pPt;
-    rp.m_pTauX = (secp256k1_scalar *) &pCtx->hv;
-
-    memset(&pCtx->hv, 0x11, sizeof(pCtx->hv));
+    memset(pPt, 0, sizeof(pPt));
+    rp.m_pT_In = pPt;
+    rp.m_pT_Out = pPt;
+    rp.m_pTauX = (secp256k1_scalar*)&hv;
 
     RangeProof_Calculate(&rp);
 
-    KeyKeeper_DisplayAddress(0, 15, &pCtx->hv);
+    KeyKeeper_DisplayAddress(&kk, 15, &hv);
 
-/*
-    {
-        secp256k1_scalar tauX;
-        memset(&tauX, 0, sizeof(tauX));
-
-        Kdf kdf;
-        Kdf_Init(&kdf, &tauX);
-
-        CompactPoint pT[2];
-
-        RangeProof rp;
-        memset(&rp, 0, sizeof(rp));
-        rp.m_Cid.m_Amount = 774440000;
-        rp.m_Cid.m_SubIdx = 45;
-        //rp.m_Cid.m_AssetID = 6;
-        rp.m_pKdf = &kdf;
-        rp.m_pT_In = pT;
-        rp.m_pT_Out = pT;
-
-        PRINTF("=> rp_ptr=%x\n", &rp);
-
-
-        int res = RangeProof_Calculate(&rp);
-        PRINTF("=> @ rp res=%d\n", res);
-    }
-*/
 }
 
 void OnBeamInvalidRequest()
