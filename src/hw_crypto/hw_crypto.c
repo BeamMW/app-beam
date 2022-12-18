@@ -633,7 +633,7 @@ int memis0(const uint8_t* p, uint32_t n)
 	return 1;
 }
 
-static int IsUintBigZero(const UintBig* p)
+int IsUintBigZero(const UintBig* p)
 {
 	return memis0(p->m_pVal, sizeof(p->m_pVal));
 }

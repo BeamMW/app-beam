@@ -50,6 +50,8 @@ typedef struct
 	uint8_t m_pVal[c_ECC_nBytes];
 } UintBig;
 
+int IsUintBigZero(const UintBig* p);
+
 typedef struct
 {
 	// platform-independent EC point representation

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "libcxng.h"
 #include "BeamApp.h"
 #include "sw.h"
 
@@ -19,6 +20,10 @@
 #include "hw_crypto/multimac.h"
 #include "hw_crypto/rangeproof.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "secp256k1/src/hash_impl.h"
+#pragma GCC diagnostic pop
 
 
 #define c_Modal_Ok 1
@@ -518,22 +523,58 @@ void SecureEraseMem(void* p, uint32_t n)
 	explicit_bzero(p, n);
 }
 
+/////////////////////////////////////
+// Slots
+#define c_KeyKeeper_Slots 16
+typedef struct
+{
+    UintBig m_pVal[c_KeyKeeper_Slots];
+} KeyKeeperSlots;
+
+static const KeyKeeperSlots N_Slots; // goes to nvrom
+
 uint32_t KeyKeeper_getNumSlots()
 {
-	return 32;
+	return c_KeyKeeper_Slots;
 }
 
 void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
 {
     UNUSED(p);
-    UNUSED(iSlot);
-    UNUSED(pRes);
+    assert(iSlot < c_KeyKeeper_Slots);
+    const UintBig* pNonce = N_Slots.m_pVal + iSlot;
+
+    if (IsUintBigZero(pNonce))
+    {
+        do
+            cx_rng(pRes->m_pVal, sizeof(*pRes)); // use rng
+        while (IsUintBigZero(pRes));
+
+        nvm_write((void*) pNonce, pRes->m_pVal, sizeof(*pNonce));
+    }
+
+    memcpy(pRes, pNonce, sizeof(*pNonce));
 }
 
 void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
 {
     UNUSED(p);
-    UNUSED(iSlot);
+    assert(iSlot < c_KeyKeeper_Slots);
+    const UintBig* pNonce = N_Slots.m_pVal + iSlot;
+
+    // use both rng and prev value to derive the new nonce
+    secp256k1_sha256_t sha;
+    secp256k1_sha256_initialize(&sha);
+    secp256k1_sha256_write(&sha, pNonce->m_pVal, sizeof(*pNonce));
+
+    UintBig hv;
+    cx_rng(hv.m_pVal, sizeof(hv)); // use rng
+    secp256k1_sha256_write(&sha, hv.m_pVal, sizeof(hv));
+
+    secp256k1_sha256_finalize(&sha, hv.m_pVal);
+
+    nvm_write((void*) pNonce, hv.m_pVal, sizeof(hv));
+
 }
 
 Amount KeyKeeper_get_MaxShieldedFee()
