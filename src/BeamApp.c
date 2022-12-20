@@ -611,7 +611,7 @@ BeamCrypto_ProtoMethods(THE_MACRO)
 
 int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t nOut)
 {
-    return KeyKeeper_Invoke(p, pInOut, nIn, &nOut);
+    return KeyKeeper_Invoke(p, pInOut, nIn, pInOut, &nOut);
 }
 
 
