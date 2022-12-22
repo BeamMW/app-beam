@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "libcxng.h"
+#include "cx.h"
 #include "BeamApp.h"
 #include "sw.h"
 
@@ -528,7 +528,7 @@ void SecureEraseMem(void* p, uint32_t n)
 #define c_KeyKeeper_Slots 16
 typedef struct
 {
-    UintBig m_pVal[c_KeyKeeper_Slots];
+    UintBig m_pSlot[c_KeyKeeper_Slots];
 } KeyKeeperSlots;
 
 static const KeyKeeperSlots N_Slots; // goes to nvrom
@@ -538,43 +538,44 @@ uint32_t KeyKeeper_getNumSlots()
 	return c_KeyKeeper_Slots;
 }
 
-void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
+__attribute__((noinline))
+void RegenerateSlot(volatile UintBig* pSlotValue)
 {
-    UNUSED(p);
-    assert(iSlot < c_KeyKeeper_Slots);
-    const UintBig* pNonce = N_Slots.m_pVal + iSlot;
-
-    if (IsUintBigZero(pNonce))
-    {
-        do
-            cx_rng(pRes->m_pVal, sizeof(*pRes)); // use rng
-        while (IsUintBigZero(pRes));
-
-        nvm_write((void*) pNonce, pRes->m_pVal, sizeof(*pNonce));
-    }
-
-    memcpy(pRes, pNonce, sizeof(*pNonce));
-}
-
-void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
-{
-    UNUSED(p);
-    assert(iSlot < c_KeyKeeper_Slots);
-    const UintBig* pNonce = N_Slots.m_pVal + iSlot;
-
-    // use both rng and prev value to derive the new nonce
+    // use both rng and prev value to derive the new value
     secp256k1_sha256_t sha;
     secp256k1_sha256_initialize(&sha);
-    secp256k1_sha256_write(&sha, pNonce->m_pVal, sizeof(*pNonce));
+    secp256k1_sha256_write(&sha, pSlotValue->m_pVal, sizeof(*pSlotValue));
 
     UintBig hv;
-    cx_rng(hv.m_pVal, sizeof(hv)); // use rng
+    cx_rng(hv.m_pVal, sizeof(hv));
     secp256k1_sha256_write(&sha, hv.m_pVal, sizeof(hv));
 
     secp256k1_sha256_finalize(&sha, hv.m_pVal);
 
-    nvm_write((void*) pNonce, hv.m_pVal, sizeof(hv));
+    nvm_write((void*) pSlotValue, hv.m_pVal, sizeof(hv));
+}
 
+__attribute__((noinline))
+void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
+{
+    UNUSED(p);
+    assert(iSlot < c_KeyKeeper_Slots);
+    volatile UintBig* pSlot = (volatile UintBig*) (N_Slots.m_pSlot + iSlot);
+
+    if (IsUintBigZero(pSlot))
+        RegenerateSlot(pSlot); // 1st-time access
+
+    memcpy(pRes, pSlot, sizeof(*pSlot));
+}
+
+__attribute__((noinline))
+void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
+{
+    UNUSED(p);
+    assert(iSlot < c_KeyKeeper_Slots);
+    volatile UintBig* pSlot = (volatile UintBig*) (N_Slots.m_pSlot + iSlot);
+
+    RegenerateSlot(pSlot);
 }
 
 Amount KeyKeeper_get_MaxShieldedFee()
