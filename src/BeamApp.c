@@ -339,6 +339,7 @@ int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig*
 
 //////////////////////
 // progr
+/*
 UX_STEP_NOCB(ux_step_progr, nn, { "Total added", g_szLine1 });
 
 UX_FLOW(ux_flow_progr,
@@ -364,6 +365,7 @@ void OnEccPointAdd()
     if (!(g_EccAdded % 500))
         UpdProgr();
 }
+*/
 
 void ui_menu_initial()
 {
@@ -371,10 +373,6 @@ void ui_menu_initial()
     if (!G_ux.stack_count)
         ux_stack_push();
 
-    UpdProgr();
-
-    void OnSomeDemo();
-    OnSomeDemo();
     ui_menu_main();
 }
 
