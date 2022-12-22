@@ -207,6 +207,19 @@ void PrintAddr_2Line(const UintBig* pAddr, uint32_t iStep)
     PrintUintBig_4(g_szLine2, pAddr, iStep + 1);
 }
 
+#ifdef TARGET_NANOSP
+static char g_szLine3[c_LineMaxLen + 1];
+static char g_szLine4[c_LineMaxLen + 1];
+
+void PrintAddr_4Line(const UintBig* pAddr)
+{
+    PrintAddr_2Line(pAddr, 0);
+    PrintUintBig_4(g_szLine3, pAddr, 2);
+    PrintUintBig_4(g_szLine4, pAddr, 3);
+}
+
+#endif
+
 /////////////////////////////////////
 // ui About
 void ui_menu_main_about();
@@ -253,13 +266,22 @@ void ui_menu_main_about()
 //////////////////////
 // Display address
 UX_STEP_CB(ux_step_address_review, bb, EndModal(c_Modal_Ok), { "Please review", "Your address" });
+#ifdef TARGET_NANOSP
+UX_STEP_CB_INIT(ux_step_address_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Addr.m_pAddr), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+#else // TARGET_NANOSP
 UX_STEP_CB_INIT(ux_step_address_1, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
 UX_STEP_CB_INIT(ux_step_address_2, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 2), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
+#endif // TARGET_NANOSP
 
 UX_FLOW(ux_flow_address,
     &ux_step_address_review,
-    &ux_step_address_1,
-    &ux_step_address_2);
+#ifdef TARGET_NANOSP
+    & ux_step_address_x
+#else // TARGET_NANOSP
+    & ux_step_address_1,
+    & ux_step_address_2
+#endif // TARGET_NANOSP
+);
 
 
 void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
@@ -282,11 +304,19 @@ UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend
 UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pUser->m_Fee), { "Fee", g_szLine1 });
 UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address" });
+#ifdef TARGET_NANOSP
+UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pAddr), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+#else // TARGET_NANOSP
 UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
+#endif // TARGET_NANOSP
 UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
+#ifdef TARGET_NANOSP
+UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+#else // TARGET_NANOSP
 UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 0), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 2), { g_szLine1, g_szLine2 });
+#endif // TARGET_NANOSP
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
 
@@ -296,11 +326,19 @@ UX_FLOW(ux_flow_send,
     &ux_step_send_asset,
     &ux_step_send_fee,
     &ux_step_send_receiver,
-    &ux_step_send_receiver_1,
-    &ux_step_send_receiver_2,
+#ifdef TARGET_NANOSP
+    & ux_step_send_receiver_x,
+#else // TARGET_NANOSP
+    & ux_step_send_receiver_1,
+    & ux_step_send_receiver_2,
+#endif // TARGET_NANOSP
     &ux_step_send_krnid,
-    &ux_step_send_krnid_1,
-    &ux_step_send_krnid_2,
+#ifdef TARGET_NANOSP
+    & ux_step_send_krnid_x,
+#else // TARGET_NANOSP
+    & ux_step_send_krnid_1,
+    & ux_step_send_krnid_2,
+#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
 UX_STEP_NOCB(ux_step_split_review, bb, { "Please review", "Split transaction" });
@@ -309,8 +347,12 @@ UX_FLOW(ux_flow_split,
     &ux_step_split_review,
     &ux_step_send_fee,
     &ux_step_send_krnid,
-    &ux_step_send_krnid_1,
-    &ux_step_send_krnid_2,
+#ifdef TARGET_NANOSP
+    & ux_step_send_krnid_x,
+#else // TARGET_NANOSP
+    & ux_step_send_krnid_1,
+    & ux_step_send_krnid_2,
+#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
 int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
@@ -563,7 +605,7 @@ void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
     if (IsUintBigZero(pSlot))
         RegenerateSlot(pSlot); // 1st-time access
 
-    memcpy(pRes, pSlot, sizeof(*pSlot));
+    memcpy(pRes->m_pVal, pSlot->m_pVal, sizeof(*pSlot));
 }
 
 __attribute__((noinline))
