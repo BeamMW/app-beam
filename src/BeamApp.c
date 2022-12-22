@@ -671,6 +671,22 @@ extern unsigned long _stack;
 void StackMark();
 void StackPrint(const void* p, const char* sz);
 
+UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
+
+UX_FLOW(ux_flow_alert,
+    &ux_step_alert);
+
+void Alert(const char* sz, uint32_t n)
+{
+    memcpy(g_szLine1, sz, sizeof(g_szLine1) - 1);
+    g_szLine1[sizeof(g_szLine1) - 1] = 0;
+    PrintDecimalAuto(g_szLine2, n);
+
+    ux_flow_init(0, ux_flow_alert, NULL);
+    DoModal();
+    ui_menu_main();
+}
+
 void BeamStackTest1()
 {
     union {
@@ -854,6 +870,11 @@ void BeamStackTest2()
                 Proto_Out_TxSend2 m_Out;
             } p5;
 
+            union {
+                Proto_In_CreateOutput m_In;
+                Proto_Out_CreateOutput m_Out;
+            } p6;
+
         } u;
 
     } s;
@@ -926,12 +947,13 @@ void BeamStackTest2()
     s.u.p3.m_In.m_Tx.m_Krn.m_hMax = 100600;
     DeriveAddress2(&s.kk2, 102, &s.u.p3.m_In.m_Mut.m_Peer);
     s.u.p3.m_In.m_Mut.m_AddrID = 101;
-    s.u.p3.m_In.m_iSlot = 15;
+    s.u.p3.m_In.m_iSlot = 2;
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p3, sizeof(s.u.p3.m_In), sizeof(s.u.p3.m_Out));
     StackPrint(&s, "TxSend1");
     PRINTF("ret=%d\n", n);
+    Alert("TxSend1", n);
 
     s.m_TxAux.m_Comms = s.u.p3.m_Out.m_Comms;
     s.m_hvUserAggr = s.u.p3.m_Out.m_UserAgreement;
@@ -942,13 +964,14 @@ void BeamStackTest2()
     s.u.p4.m_In.m_Tx.m_Krn.m_hMax = 100600;
     DeriveAddress2(&s.kk1, 101, &s.u.p4.m_In.m_Mut.m_Peer);
 
-   s.u.p4.m_In.m_Mut.m_AddrID = 102;
+    s.u.p4.m_In.m_Mut.m_AddrID = 102;
     s.u.p4.m_In.m_Comms = s.m_TxAux.m_Comms;
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk2, (uint8_t*) &s.u.p4, sizeof(s.u.p4.m_In), sizeof(s.u.p4.m_Out));
     StackPrint(&s, "TxReceive");
     PRINTF("ret=%d\n", n);
+    Alert("TxReceive", n);
 
     memmove(&s.u.p5.m_In.m_PaymentProof, &s.u.p4.m_Out.m_PaymentProof, sizeof(s.u.p5.m_In.m_PaymentProof));
 
@@ -960,7 +983,7 @@ void BeamStackTest2()
     s.u.p5.m_In.m_Tx.m_Krn.m_hMax = 100600;
     DeriveAddress2(&s.kk2, 102, &s.u.p5.m_In.m_Mut.m_Peer);
     s.u.p5.m_In.m_Mut.m_AddrID = 101;
-    s.u.p5.m_In.m_iSlot = 15;
+    s.u.p5.m_In.m_iSlot = 2;
     s.u.p5.m_In.m_Comms = s.m_TxAux.m_Comms;
     s.u.p5.m_In.m_UserAgreement = s.m_hvUserAggr;
 
@@ -968,5 +991,21 @@ void BeamStackTest2()
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p5, sizeof(s.u.p5.m_In), sizeof(s.u.p5.m_Out));
     StackPrint(&s, "TxSend2");
     PRINTF("ret=%d\n", n);
+    Alert("TxSend2", n);
+
+    memset(&s.u.p6, 0, sizeof(s.u.p6));
+    s.u.p6.m_In.m_OpCode = g_Proto_Code_CreateOutput;
+    s.u.p6.m_In.m_Cid.m_Amount = 400000;
+    s.u.p6.m_In.m_Cid.m_Idx = 15;
+    s.u.p6.m_In.m_Cid.m_Type = 0x22;
+    s.u.p6.m_In.m_Cid.m_SubIdx = 8;
+    s.u.p6.m_In.m_Cid.m_Amount = 4500000000ull;
+    s.u.p6.m_In.m_Cid.m_AssetID = 0;
+
+    StackMark();
+    n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*)&s.u.p6, sizeof(s.u.p6.m_In), sizeof(s.u.p6.m_Out));
+    StackPrint(&s, "CreateOutput");
+    PRINTF("ret=%d\n", n);
+    Alert("CreateOutput", n);
 }
 
