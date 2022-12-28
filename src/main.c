@@ -137,32 +137,34 @@ uint32_t OnApduRcv(uint32_t lenInp)
 
 #define STACK_MARK 0xfadebabe
 
-extern unsigned long _stack;
-
 __attribute__((noinline))
 void StackMark()
 {
+#ifdef STACK_CANARY
     uint32_t* pMark = (uint32_t*) &_stack;
     for (; ((uint32_t*) &pMark) - pMark > 20; pMark++)
         (*pMark) = STACK_MARK;
+#endif // STACK_CANARY
 }
 
 __attribute__((noinline))
 void StackPrint(const void* p, const char* sz)
 {
+#ifdef STACK_CANARY
     uint32_t* pMark = (uint32_t*) &_stack;
     for (; ; pMark++)
         if ((*pMark) != STACK_MARK)
             break;
 
     PRINTF("@@ Op=%s, Stack consumed: %u\n", sz, (((uint32_t*) p) - pMark) * sizeof(uint32_t));
+#else // STACK_CANARY
+    UNUSED(p);
+    UNUSED(sz);
+#endif // STACK_CANARY
 }
 
 void app_main()
 {
-
-	_stack = STACK_MARK;
-	
     //BeamStackTest1();
     //BeamStackTest2();
     //halt();
@@ -172,12 +174,18 @@ void app_main()
     PRINTF("uxbuf_len=%u\n", sizeof(G_io_seproxyhal_spi_buffer));
     PRINTF("gux_len=%u\n", sizeof(G_ux));
     PRINTF("gux_params_len=%u\n", sizeof(G_ux_params));
-	PRINTF("canary_ptr=%x\n", &_stack);
+
+#ifdef STACK_CANARY
+    _stack = STACK_MARK;
+    PRINTF("canary_ptr=%x\n", &_stack);
+#endif // STACK_CANARY
 
     for (int ioLen = 0; ; )
     {
+#ifdef STACK_CANARY
 		PRINTF("Stack canary=%x\n", _stack);
-		
+#endif // STACK_CANARY
+
         BEGIN_TRY{
             TRY {
 

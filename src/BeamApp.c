@@ -579,7 +579,7 @@ uint32_t KeyKeeper_getNumSlots()
 }
 
 __attribute__((noinline))
-void RegenerateSlot(volatile UintBig* pSlotValue)
+void RegenerateSlot(UintBig* pSlotValue)
 {
     // use both rng and prev value to derive the new value
     secp256k1_sha256_t sha;
@@ -600,7 +600,7 @@ void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
 {
     UNUSED(p);
     assert(iSlot < c_KeyKeeper_Slots);
-    volatile UintBig* pSlot = (volatile UintBig*) (N_Slots.m_pSlot + iSlot);
+    UintBig* pSlot = (UintBig*) (N_Slots.m_pSlot + iSlot);
 
     if (IsUintBigZero(pSlot))
         RegenerateSlot(pSlot); // 1st-time access
@@ -613,7 +613,7 @@ void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
 {
     UNUSED(p);
     assert(iSlot < c_KeyKeeper_Slots);
-    volatile UintBig* pSlot = (volatile UintBig*) (N_Slots.m_pSlot + iSlot);
+    UintBig* pSlot = (UintBig*) (N_Slots.m_pSlot + iSlot);
 
     RegenerateSlot(pSlot);
 }
@@ -706,11 +706,6 @@ uint16_t OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
     return SW_OK;
 }
 
-
-extern unsigned long _stack;
-void StackMark();
-void StackPrint(const void* p, const char* sz);
-
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
 
 UX_FLOW(ux_flow_alert,
@@ -777,8 +772,10 @@ void BeamStackTest1()
     u.m_TheVal = __builtin_bswap32(u.m_TheVal);
     PRINTF("@@ TheVal = %u\n", u.m_TheVal);
 
-
+#ifdef STACK_CANARY
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &u) - ((uint8_t*) &_stack));
+#endif // STACK_CANARY
+
     PRINTF("@@ FastGen-custom size = %u\n", sizeof(u.p3.aGen));
 
     StackMark();
@@ -919,7 +916,9 @@ void BeamStackTest2()
 
     } s;
 
+#ifdef STACK_CANARY
     PRINTF("@@ Stack available: %u\n", ((uint8_t*) &s) - ((uint8_t*) &_stack));
+#endif // #ifdef STACK_CANARY
 
     memset(&s.u.hv, 0, sizeof(s.u.hv));
     memset(&s.kk1, 0, sizeof(s.kk1));

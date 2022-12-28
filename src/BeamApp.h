@@ -27,6 +27,14 @@ void EndModal(uint8_t res);
 
 extern ux_state_t G_ux; // Global structure to perform asynchronous UX aside IO operations.
 
+#ifdef TARGET_NANOS
+#   define STACK_CANARY
+extern unsigned long _stack;
+#endif // TARGET_NANOS
+
+void StackMark();
+void StackPrint(const void* p, const char* sz);
+
 
 // unit tests
 void BeamStackTest1();
