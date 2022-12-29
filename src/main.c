@@ -63,7 +63,15 @@ void EndModal(uint8_t res)
 
 uint32_t OnApduRcv(uint32_t lenInp)
 {
+//    void Alert(const char* sz, uint32_t n);
+//    Alert("OnApduRcv", lenInp);
 
+    uint32_t lenOutp = sizeof(G_io_apdu_buffer);
+    OnBeamHostRequest(G_io_apdu_buffer, lenInp, &lenOutp);
+
+    return lenOutp;
+
+/*
      // Structure with fields of APDU command.
 #pragma pack (push, 1)
     typedef struct {
@@ -78,6 +86,8 @@ uint32_t OnApduRcv(uint32_t lenInp)
 
     uint16_t retCode = SW_WRONG_DATA_LENGTH;
     uint32_t lenOutp = 0;
+
+    memset(G_io_apdu_buffer, 0xaa, 175);
 
     if (lenInp < sizeof(command_t))
     {
@@ -127,7 +137,7 @@ uint32_t OnApduRcv(uint32_t lenInp)
     retCode = bswap16_be(retCode);
     memcpy(G_io_apdu_buffer + lenOutp, &retCode, sizeof(retCode));
 
-    return lenOutp + sizeof(retCode);
+    return lenOutp + sizeof(retCode);*/
 }
 
 

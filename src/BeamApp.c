@@ -691,19 +691,31 @@ void OnSomeDemo()
 
 }
 
-void OnBeamInvalidRequest()
+__attribute__((noinline))
+void InitKeyKeeper(KeyKeeper* pKk)
 {
-    // maybe display something?
+    memset(pKk, 0, sizeof(*pKk));
+
+    // TODO: derive our master key
+    UintBig hv;
+    memset(&hv, 0, sizeof(hv));
+    Kdf_Init(&pKk->m_MasterKey, &hv);
 }
 
-uint16_t OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
+void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
-    UNUSED(pBuf);
-    UNUSED(nIn);
-    UNUSED(pOut);
+    KeyKeeper kk;
+    InitKeyKeeper(&kk);
 
-    *pOut = 0;
-    return SW_OK;
+    (*pOut)--;
+
+    int res = KeyKeeper_Invoke(&kk, pBuf, nIn, pBuf + 1, pOut);
+    pBuf[0] = (uint8_t) res;
+
+    if (c_KeyKeeper_Status_Ok == res)
+        (*pOut)++;
+    else
+        (*pOut) = 1;
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
