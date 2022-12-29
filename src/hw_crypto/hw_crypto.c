@@ -29,7 +29,12 @@
 #else
 #	pragma warning (push, 0) // suppress warnings from secp256k1
 #	pragma warning (disable: 4706 4701) // assignment within conditional expression
+#	define __attribute__(x) __declspec x
 #endif
+
+#ifndef UNUSED
+#	define UNUSED(x) (x)
+#endif // UNUSED
 
 #if BeamCrypto_ScarceStack
 #	define __stack_hungry__ __attribute__((noinline))
@@ -250,27 +255,22 @@ static void MultiMac_Calculate_LoadFast(const MultiMac_Context* p, secp256k1_ge*
 	secp256k1_ge_from_storage(pGe, p->m_Fast.m_pGen0 + n);
 }
 
-void OnEccPointAdd();
-
 __stack_hungry__
 static void wrap_gej_add_ge_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_ge_var(r, a, b, 0 /* rzr */);
-	//OnEccPointAdd();
 }
 
 __stack_hungry__
 static void wrap_gej_add_zinv_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b, const secp256k1_fe* bzinv)
 {
 	secp256k1_gej_add_zinv_var(r, a, b, bzinv);
-	//OnEccPointAdd();
 }
 
 __stack_hungry__
 static void wrap_gej_add_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_gej* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_var(r, a, b, 0 /* rzr */);
-	//OnEccPointAdd();
 }
 
 __stack_hungry__
@@ -1962,7 +1962,7 @@ void KeyKeeper_GetPKdf(const KeyKeeper* p, KdfPub* pRes, const uint32_t* pChild)
 
 //////////////////
 // Protocol
-#define PROTO_METHOD(name) __stack_hungry__ static int HandleProto_##name(KeyKeeper* p, OpIn_##name* pIn, uint32_t nIn, OpOut_##name* pOut, uint32_t nOut, uint32_t* pOutSize)
+#define PROTO_METHOD(name) __stack_hungry__ static uint8_t HandleProto_##name(KeyKeeper* p, OpIn_##name* pIn, uint32_t nIn, OpOut_##name* pOut, uint32_t nOut, uint32_t* pOutSize)
 
 #define PROTO_UNUSED_ARGS \
 	UNUSED(p); \
@@ -1980,6 +1980,7 @@ typedef struct { \
 	BeamCrypto_ProtoRequest_##name(THE_MACRO_Field) \
 } OpIn_##name; \
 typedef struct { \
+	uint8_t m_StatusCode; \
 	BeamCrypto_ProtoResponse_##name(THE_MACRO_Field) \
 } OpOut_##name; \
 PROTO_METHOD(name);
@@ -2047,8 +2048,7 @@ void N2H_TxCommonIn(TxCommonIn* p, const TxCommonIn* p_unaligned)
 	N2H_uint_inplace(p->m_Krn.m_hMax, 64);
 }
 
-__stack_hungry__
-int KeyKeeper_Invoke(KeyKeeper* p, uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pOutSize)
+uint8_t KeyKeeper_Invoke2(KeyKeeper* p, uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pOutSize)
 {
 	if (!nIn)
 		return c_KeyKeeper_Status_ProtoError;
@@ -2077,6 +2077,18 @@ int KeyKeeper_Invoke(KeyKeeper* p, uint8_t* pIn, uint32_t nIn, uint8_t* pOut, ui
 	return c_KeyKeeper_Status_ProtoError;
 }
 
+void KeyKeeper_Invoke(KeyKeeper* p, uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pOutSize)
+{
+	if (!*pOutSize)
+		return; // at least 1 byte required to return status code
+
+	uint8_t retVal = KeyKeeper_Invoke2(p, pIn, nIn, pOut, pOutSize);
+	*pOut = retVal;
+
+	if (c_KeyKeeper_Status_Ok != retVal)
+		*pOutSize = 1; // return only status code in case of err
+}
+
 PROTO_METHOD(Version)
 {
 	PROTO_UNUSED_ARGS;
@@ -2084,7 +2096,8 @@ PROTO_METHOD(Version)
 	if (nIn)
 		return c_KeyKeeper_Status_ProtoError; // size mismatch
 
-	H2N_uint(pOut->m_Value, BeamCrypto_CurrentProtoVer, 32);
+	static_assert(sizeof(pOut->m_Signature) == sizeof(BeamCrypto_CurrentSignature) - sizeof(char), "");
+	memcpy(pOut->m_Signature, BeamCrypto_CurrentSignature, sizeof(BeamCrypto_CurrentSignature) - sizeof(char));
 
 	return c_KeyKeeper_Status_Ok;
 }
@@ -2449,8 +2462,6 @@ PROTO_METHOD(TxAddCoins)
 		SECURE_ERASE_OBJ(p->u);
 		p->m_State = 0;
 	}
-	else
-		pOut->m_Dummy = 0;
 
 	return status;
 }
@@ -2703,7 +2714,6 @@ PROTO_METHOD(DisplayAddress)
 
 	KeyKeeper_DisplayAddress(p, addrID, &hvAddr);
 
-	pOut->m_Dummy = 0;
 	return c_KeyKeeper_Status_Ok;
 }
 

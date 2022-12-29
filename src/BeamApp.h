@@ -39,6 +39,7 @@ void StackPrint(const void* p, const char* sz);
 // unit tests
 void BeamStackTest1();
 void BeamStackTest2();
+void BeamStackTest3();
 
 void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut);
 

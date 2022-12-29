@@ -639,7 +639,7 @@ int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
 
 #define THE_MACRO(id, name) \
 typedef struct { uint8_t m_OpCode; BeamCrypto_ProtoRequest_##name(THE_FIELD) } Proto_In_##name; \
-typedef struct { BeamCrypto_ProtoResponse_##name(THE_FIELD) } Proto_Out_##name; \
+typedef struct { uint8_t m_RetVal; BeamCrypto_ProtoResponse_##name(THE_FIELD) } Proto_Out_##name; \
 const uint8_t g_Proto_Code_##name = id;
 
 BeamCrypto_ProtoMethods(THE_MACRO)
@@ -652,7 +652,8 @@ BeamCrypto_ProtoMethods(THE_MACRO)
 
 int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t nOut)
 {
-    return KeyKeeper_Invoke(p, pInOut, nIn, pInOut, &nOut);
+    KeyKeeper_Invoke(p, pInOut, nIn, pInOut, &nOut);
+    return *pInOut;
 }
 
 
@@ -707,15 +708,7 @@ void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
     KeyKeeper kk;
     InitKeyKeeper(&kk);
 
-    (*pOut)--;
-
-    int res = KeyKeeper_Invoke(&kk, pBuf, nIn, pBuf + 1, pOut);
-    pBuf[0] = (uint8_t) res;
-
-    if (c_KeyKeeper_Status_Ok == res)
-        (*pOut)++;
-    else
-        (*pOut) = 1;
+    KeyKeeper_Invoke(&kk, pBuf, nIn, pBuf, pOut);
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
@@ -1058,5 +1051,71 @@ void BeamStackTest2()
     StackPrint(&s, "CreateOutput");
     PRINTF("ret=%d\n", n);
     Alert("CreateOutput", n);
+}
+
+void BeamStackTest3()
+{
+    struct
+    {
+        KeyKeeper kk;
+
+        union
+        {
+            UintBig hv;
+
+            Proto_In_CreateShieldedVouchers reqVouchers;
+
+            struct {
+                Proto_Out_CreateShieldedVouchers m_Out;
+                ShieldedVoucher m_Voucher;
+            } resVouchers;
+
+            struct {
+                Proto_In_TxAddCoins m_Msg;
+                ShieldedInput_Blob m_Blob;
+                ShieldedInput_Fmt m_Fmt;
+            } reqShieldedCoin;
+
+            Proto_In_TxAddCoins m_Out_ShieldedCoin;
+        } u;
+
+    } s;
+
+#ifdef STACK_CANARY
+    PRINTF("@@ Stack available: %u\n", ((uint8_t*) &s) - ((uint8_t*) &_stack));
+#endif // #ifdef STACK_CANARY
+
+    memset(&s, 0, sizeof(s));
+    memset(&s.kk, 0, sizeof(s.kk));
+    Kdf_Init(&s.kk.m_MasterKey, &s.u.hv);
+
+
+    StackMark();
+
+    s.u.reqVouchers.m_OpCode = g_Proto_Code_CreateShieldedVouchers;
+    s.u.reqVouchers.m_Count = 1;
+    int n = KeyKeeper_InvokeExact(&s.kk, (uint8_t*) &s.u.reqVouchers, sizeof(s.u.reqVouchers), sizeof(s.u.resVouchers));
+
+    StackPrint(&s, "CreateVouchers");
+
+    PRINTF("CreateVouchers, ret=%d\n", n);
+
+    memset(&s.u.reqShieldedCoin, 0, sizeof(s.u.reqShieldedCoin));
+
+    s.u.reqShieldedCoin.m_Msg.m_OpCode = g_Proto_Code_TxAddCoins;
+    s.u.reqShieldedCoin.m_Msg.m_Reset = 1;
+    s.u.reqShieldedCoin.m_Msg.m_InsShielded = 1;
+
+    s.u.reqShieldedCoin.m_Fmt.m_Amount = 9000000000ull;
+    s.u.reqShieldedCoin.m_Fmt.m_AssetID = 14;
+    s.u.reqShieldedCoin.m_Fmt.m_nViewerIdx = 2;
+
+    StackMark();
+
+    n = KeyKeeper_InvokeExact(&s.kk, (uint8_t*)&s.u.reqShieldedCoin, sizeof(s.u.reqShieldedCoin), sizeof(s.u.m_Out_ShieldedCoin));
+
+    StackPrint(&s, "AddShieldedInput");
+
+    PRINTF("AddShieldedInput, ret=%d\n", n);
 }
 
