@@ -195,7 +195,7 @@ union
         AssetID m_Aid;
         const UintBig* m_pAddr;
         const TxKernelUser* m_pUser;
-        const UintBig* m_pKrnID;
+        //const UintBig* m_pKrnID;
 
     } m_Spend;
 
@@ -310,13 +310,13 @@ UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.
 UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
 #endif // TARGET_NANOSP
-UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
-#ifdef TARGET_NANOSP
-UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
-#else // TARGET_NANOSP
-UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 0), { g_szLine1, g_szLine2 });
-UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 2), { g_szLine1, g_szLine2 });
-#endif // TARGET_NANOSP
+//UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
+//#ifdef TARGET_NANOSP
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+//#else // TARGET_NANOSP
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 0), { g_szLine1, g_szLine2 });
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 2), { g_szLine1, g_szLine2 });
+//#endif // TARGET_NANOSP
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
 
@@ -332,13 +332,13 @@ UX_FLOW(ux_flow_send,
     & ux_step_send_receiver_1,
     & ux_step_send_receiver_2,
 #endif // TARGET_NANOSP
-    &ux_step_send_krnid,
-#ifdef TARGET_NANOSP
-    & ux_step_send_krnid_x,
-#else // TARGET_NANOSP
-    & ux_step_send_krnid_1,
-    & ux_step_send_krnid_2,
-#endif // TARGET_NANOSP
+//    &ux_step_send_krnid,
+//#ifdef TARGET_NANOSP
+//    & ux_step_send_krnid_x,
+//#else // TARGET_NANOSP
+//    & ux_step_send_krnid_1,
+//    & ux_step_send_krnid_2,
+//#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
 UX_STEP_NOCB(ux_step_split_review, bb, { "Please review", "Split transaction" });
@@ -346,28 +346,28 @@ UX_STEP_NOCB(ux_step_split_review, bb, { "Please review", "Split transaction" })
 UX_FLOW(ux_flow_split,
     &ux_step_split_review,
     &ux_step_send_fee,
-    &ux_step_send_krnid,
-#ifdef TARGET_NANOSP
-    & ux_step_send_krnid_x,
-#else // TARGET_NANOSP
-    & ux_step_send_krnid_1,
-    & ux_step_send_krnid_2,
-#endif // TARGET_NANOSP
+//    &ux_step_send_krnid,
+//#ifdef TARGET_NANOSP
+//    & ux_step_send_krnid_x,
+//#else // TARGET_NANOSP
+//    & ux_step_send_krnid_1,
+//    & ux_step_send_krnid_2,
+//#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
 int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
 {
     UNUSED(p);
 
-    if (!pKrnID)
-        return c_KeyKeeper_Status_Ok; // preliminary confirmation (1st invocation), always agree
+    if (pPeerID && pKrnID)
+        return c_KeyKeeper_Status_Ok; // Current decision: ask only on the 1st invocation. Final confirmation isn't needed.
 
 
     g_Ux_U.m_Spend.m_Amount = val;
     g_Ux_U.m_Spend.m_Aid = aid;
     g_Ux_U.m_Spend.m_pAddr = pPeerID;
     g_Ux_U.m_Spend.m_pUser = pUser;
-    g_Ux_U.m_Spend.m_pKrnID = pKrnID;
+    //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
 
 
     ux_flow_init(0, pPeerID ? ux_flow_send : ux_flow_split, NULL);
@@ -409,8 +409,18 @@ void OnEccPointAdd()
 }
 */
 
+KeyKeeper g_KeyKeeper;
+
+//__stack_hungry__
 void ui_menu_initial()
 {
+    memset(&g_KeyKeeper, 0, sizeof(g_KeyKeeper));
+
+    // TODO: derive our master key
+    UintBig hv;
+    memset(&hv, 0, sizeof(hv));
+    Kdf_Init(&g_KeyKeeper.m_MasterKey, &hv);
+
     UX_INIT();
     if (!G_ux.stack_count)
         ux_stack_push();
@@ -692,23 +702,9 @@ void OnSomeDemo()
 
 }
 
-__attribute__((noinline))
-void InitKeyKeeper(KeyKeeper* pKk)
-{
-    memset(pKk, 0, sizeof(*pKk));
-
-    // TODO: derive our master key
-    UintBig hv;
-    memset(&hv, 0, sizeof(hv));
-    Kdf_Init(&pKk->m_MasterKey, &hv);
-}
-
 void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
-    KeyKeeper kk;
-    InitKeyKeeper(&kk);
-
-    KeyKeeper_Invoke(&kk, pBuf, nIn, pBuf, pOut);
+    KeyKeeper_Invoke(&g_KeyKeeper, pBuf, nIn, pBuf, pOut);
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
