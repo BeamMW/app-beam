@@ -18,6 +18,7 @@
 typedef uint64_t Amount;
 typedef uint32_t AssetID;
 
+#pragma pack (push, 1)
 typedef struct
 {
 	uint64_t m_Idx;
@@ -27,7 +28,11 @@ typedef struct
 	Amount  m_Amount;
 	AssetID m_AssetID;
 
+	// alignment is ok. We only remove the trailing padding
+	// We don't deal with arrays internally, and input arrays are considered unaligned and copied one-by-one
+
 } CoinID;
+#pragma pack (pop)
 
 #define c_CoinID_Scheme_V0 0
 #define c_CoinID_Scheme_V1 1
