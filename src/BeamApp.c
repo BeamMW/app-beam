@@ -355,7 +355,7 @@ UX_FLOW(ux_flow_split,
 //#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
-int KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
+uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
 {
     UNUSED(p);
 
@@ -662,8 +662,7 @@ BeamCrypto_ProtoMethods(THE_MACRO)
 
 int KeyKeeper_InvokeExact(KeyKeeper* p, uint8_t* pInOut, uint32_t nIn, uint32_t nOut)
 {
-    KeyKeeper_Invoke(p, pInOut, nIn, pInOut, &nOut);
-    return *pInOut;
+    return KeyKeeper_Invoke(p, pInOut, nIn, pInOut, &nOut);
 }
 
 
@@ -704,7 +703,18 @@ void OnSomeDemo()
 
 void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
-    KeyKeeper_Invoke(&g_KeyKeeper, pBuf, nIn, pBuf, pOut);
+    uint16_t errCode = KeyKeeper_Invoke(&g_KeyKeeper, pBuf, nIn, pBuf, pOut);
+    if (c_KeyKeeper_Status_Ok == errCode)
+        pBuf[0] = c_KeyKeeper_Status_Ok;
+    else
+    {
+        // return distinguishable error message
+        pBuf[0] = (uint8_t) errCode;
+        pBuf[1] = (uint8_t) (errCode >> 8);
+        pBuf[2] = 'b';
+        pBuf[3] = 'F';
+        *pOut = 4;
+    }
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
