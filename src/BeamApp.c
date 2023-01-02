@@ -1148,3 +1148,85 @@ void BeamStackTest3()
     PRINTF("AddShieldedInput, ret=%d\n", n);
 }
 
+void memcpy_unaligned(void* pDst, const void* pSrc, uint32_t n);
+
+void BeamStackTest4()
+{
+    KeyKeeper kk;
+    memset(&kk, 0, sizeof(kk));
+
+    UintBig hv;
+    memset(hv.m_pVal, 0, sizeof(hv.m_pVal));
+    Kdf_Init(&kk.m_MasterKey, &hv);
+
+
+    // test CreateShieldedInput
+    {
+        Proto_In_CreateShieldedInput_1* pIn = (Proto_In_CreateShieldedInput_1*) G_io_apdu_buffer;
+        memset(pIn, 0, sizeof(*pIn));
+        pIn->m_OpCode = g_Proto_Code_CreateShieldedInput_1;
+
+        {
+            ShieldedInput_Fmt fmt;
+            fmt.m_Amount = 43300;
+            fmt.m_AssetID = 15;
+            fmt.m_nViewerIdx = 443;
+
+            memcpy_unaligned(&pIn->m_InpFmt, &fmt, sizeof(fmt));
+        }
+
+        {
+            ShieldedInput_SpendParams sp;
+            sp.m_hMin = 431000;
+            sp.m_hMax = 432000;
+            sp.m_WindowEnd = 4672342;
+            sp.m_Sigma_M = 8;
+            sp.m_Sigma_n = 4;
+
+            memcpy_unaligned(&pIn->m_SpendParams, &sp, sizeof(sp));
+        }
+
+        Proto_Out_CreateShieldedInput_1* pOut = (Proto_Out_CreateShieldedInput_1*) G_io_apdu_buffer;
+
+        StackMark();
+
+        int n = KeyKeeper_InvokeExact(&kk, (uint8_t*) pIn, sizeof(*pIn), sizeof(*pOut));
+
+        StackPrint(&kk, "CreateShieldedInput_1");
+
+        PRINTF("CreateShieldedInput_1, ret=%d\n", n);
+    }
+
+    {
+        Proto_In_CreateShieldedInput_2* pIn = (Proto_In_CreateShieldedInput_2*) G_io_apdu_buffer;
+        memset(pIn, 0, sizeof(*pIn));
+        pIn->m_OpCode = g_Proto_Code_CreateShieldedInput_2;
+
+        Proto_Out_CreateShieldedInput_2* pOut = (Proto_Out_CreateShieldedInput_2*) G_io_apdu_buffer;
+
+        StackMark();
+
+        int n = KeyKeeper_InvokeExact(&kk, (uint8_t*) pIn, sizeof(*pIn), sizeof(*pOut));
+
+        StackPrint(&kk, "CreateShieldedInput_2");
+
+        PRINTF("CreateShieldedInput_2, ret=%d\n", n);
+    }
+
+    {
+        Proto_In_CreateShieldedInput_3* pIn = (Proto_In_CreateShieldedInput_3*) G_io_apdu_buffer;
+        memset(pIn, 0, sizeof(*pIn));
+        pIn->m_OpCode = g_Proto_Code_CreateShieldedInput_3;
+
+        Proto_Out_CreateShieldedInput_3* pOut = (Proto_Out_CreateShieldedInput_3*) G_io_apdu_buffer;
+
+        StackMark();
+
+        int n = KeyKeeper_InvokeExact(&kk, (uint8_t*) pIn, sizeof(*pIn) + sizeof(CompactPoint) * 8, sizeof(*pOut));
+
+        StackPrint(&kk, "CreateShieldedInput_3");
+
+        PRINTF("CreateShieldedInput_3, ret=%d\n", n);
+    }
+
+}
