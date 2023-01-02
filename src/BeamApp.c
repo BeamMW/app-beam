@@ -409,17 +409,40 @@ void OnEccPointAdd()
 }
 */
 
+#if (defined STACK_CANARY) && (defined BeamCrypto_ScarceStack)
+
+KeyKeeper* KeyKeeper_Get()
+{
+    size_t pPtr = (size_t) &_stack;
+
+    // align up
+    if (7 & pPtr)
+        pPtr = (pPtr + 7) & ~7;
+
+    return (KeyKeeper*) pPtr;
+}
+
+#else // STACK_CANARY
+
 KeyKeeper g_KeyKeeper;
+KeyKeeper* KeyKeeper_Get()
+{
+    return &g_KeyKeeper;
+}
+
+#endif // STACK_CANARY
+
 
 //__stack_hungry__
 void ui_menu_initial()
 {
-    memset(&g_KeyKeeper, 0, sizeof(g_KeyKeeper));
+    KeyKeeper* pKk = KeyKeeper_Get();
+    memset(pKk, 0, sizeof(*pKk));
 
     // TODO: derive our master key
     UintBig hv;
     memset(&hv, 0, sizeof(hv));
-    Kdf_Init(&g_KeyKeeper.m_MasterKey, &hv);
+    Kdf_Init(&pKk->m_MasterKey, &hv);
 
     UX_INIT();
     if (!G_ux.stack_count)
@@ -703,7 +726,7 @@ void OnSomeDemo()
 
 void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
-    uint16_t errCode = KeyKeeper_Invoke(&g_KeyKeeper, pBuf, nIn, pBuf, pOut);
+    uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pBuf, nIn, pBuf, pOut);
     if (c_KeyKeeper_Status_Ok == errCode)
         pBuf[0] = c_KeyKeeper_Status_Ok;
     else
