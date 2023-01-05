@@ -18,7 +18,11 @@
 #ifdef BeamCrypto_SlowLoad
 #	define c_MultiMac_nBits_Rangeproof 2
 #else // BeamCrypto_SlowLoad
-#	define c_MultiMac_nBits_Rangeproof 4
+#	ifdef BeamCrypto_ScarceStack
+#		define c_MultiMac_nBits_Rangeproof 3
+#	else // BeamCrypto_ScarceStack
+#		define c_MultiMac_nBits_Rangeproof 4
+#	endif // BeamCrypto_ScarceStack
 #endif // BeamCrypto_SlowLoad
 
 #define c_MultiMac_nBits_H 4
