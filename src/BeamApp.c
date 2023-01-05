@@ -686,7 +686,7 @@ void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint
 
 #else // BeamCrypto_ScarceStack
 
-static const KeyKeeper_AuxBuf g_AuxBuf; // goes to RAM
+KeyKeeper_AuxBuf g_AuxBuf; // goes to RAM
 
 const KeyKeeper_AuxBuf* KeyKeeper_GetAuxBuf(KeyKeeper* pKk)
 {
