@@ -662,6 +662,49 @@ int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
     return 1;
 }
 
+/////////////////////////////////////
+// AuxBuf
+#ifdef BeamCrypto_ScarceStack
+
+static const KeyKeeper_AuxBuf N_AuxBuf; // goes to nvrom
+
+const KeyKeeper_AuxBuf* KeyKeeper_GetAuxBuf(KeyKeeper* pKk)
+{
+    UNUSED(pKk);
+    return &N_AuxBuf;
+}
+
+void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint32_t nSize)
+{
+    UNUSED(pKk);
+    assert(nOffset + nSize <= sizeof(KeyKeeper_AuxBuf));
+
+    uint8_t* pDst = (uint8_t*) &N_AuxBuf;
+
+    nvm_write(pDst + nOffset, (void*) p, nSize);
+}
+
+#else // BeamCrypto_ScarceStack
+
+static const KeyKeeper_AuxBuf g_AuxBuf; // goes to RAM
+
+const KeyKeeper_AuxBuf* KeyKeeper_GetAuxBuf(KeyKeeper* pKk)
+{
+    UNUSED(pKk);
+    return &g_AuxBuf;
+}
+
+void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint32_t nSize)
+{
+    UNUSED(pKk);
+    assert(nOffset + nSize <= sizeof(KeyKeeper_AuxBuf));
+
+    uint8_t* pDst = (uint8_t*) &g_AuxBuf;
+
+    memcpy(pDst + nOffset, p, nSize);
+}
+
+#endif // BeamCrypto_ScarceStack
 
 
 
