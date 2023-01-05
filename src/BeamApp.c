@@ -195,6 +195,7 @@ union
         AssetID m_Aid;
         const UintBig* m_pAddr;
         const TxKernelUser* m_pUser;
+        uint32_t m_Flags;
         //const UintBig* m_pKrnID;
 
     } m_Spend;
@@ -355,11 +356,12 @@ UX_FLOW(ux_flow_split,
 //#endif // TARGET_NANOSP
     &ux_step_send_Ok);
 
-uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID)
+uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID, uint32_t nFlags)
 {
     UNUSED(p);
+    UNUSED(pKrnID);
 
-    if (pPeerID && pKrnID)
+    if (c_KeyKeeper_ConfirmSpend_2ndPhase & nFlags)
         return c_KeyKeeper_Status_Ok; // Current decision: ask only on the 1st invocation. Final confirmation isn't needed.
 
 
@@ -367,8 +369,8 @@ uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const Uin
     g_Ux_U.m_Spend.m_Aid = aid;
     g_Ux_U.m_Spend.m_pAddr = pPeerID;
     g_Ux_U.m_Spend.m_pUser = pUser;
+    g_Ux_U.m_Spend.m_Flags = nFlags;
     //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
-
 
     ux_flow_init(0, pPeerID ? ux_flow_send : ux_flow_split, NULL);
     uint8_t res = DoModal();
