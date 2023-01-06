@@ -1,6 +1,7 @@
 #include "multimac.h"
 #include <assert.h>
 
+__attribute__((aligned(8)))
 static const uint8_t g_ContextBuf[] = {
 
 #ifdef BeamCrypto_ScarceStack
