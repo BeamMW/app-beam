@@ -629,12 +629,6 @@ void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
     RegenerateSlot(pSlot);
 }
 
-int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
-{
-    UNUSED(p);
-    return 1;
-}
-
 /////////////////////////////////////
 // AuxBuf
 #ifdef BeamCrypto_ScarceStack
