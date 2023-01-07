@@ -410,6 +410,59 @@ KeyKeeper* KeyKeeper_Get()
     return &g_KeyKeeper;
 }
 
+static const uint32_t N_iAccount = 0; // goes to nvrom
+
+
+__attribute__((noinline))
+bool InitMasterKey(uint32_t iAccount)
+{
+#define HARDENED_PATH_MASK 0x80000000
+
+    uint32_t pBip44[5] = {
+        HARDENED_PATH_MASK | 44,        // Purpose == bip44
+        HARDENED_PATH_MASK | 0x5fd,     // Coin type = BEAM
+        HARDENED_PATH_MASK | iAccount,  // Account
+        0,                              // Change
+        0,                              // Addr index
+    };
+
+#pragma pack (push, 1)
+    union
+    {
+        uint8_t pNode[64];
+        UintBig hv0; // 1st part of the generated node
+    } u;
+#pragma pack (pop)
+
+    memset(&u, 0, sizeof(u));
+
+    bool bOk = false;
+
+	BEGIN_TRY {
+		TRY {
+
+			// Derive node and chain code from path and seed key
+            os_perso_derive_node_with_seed_key(HDW_NORMAL, CX_CURVE_SECP256K1, pBip44, sizeof(pBip44) / sizeof(pBip44[0]), u.pNode, 0, 0, 0);
+
+            KeyKeeper* pKk = KeyKeeper_Get();
+            memset(pKk, 0, sizeof(*pKk));
+
+            Kdf_Init(&pKk->m_MasterKey, &u.hv0);
+
+            bOk = true;
+		}
+		
+		FINALLY {
+            explicit_bzero(&u, sizeof(u));
+		}
+	}
+	END_TRY;
+
+    return bOk;
+}
+
+
+
 
 //__stack_hungry__
 void ui_menu_initial()
@@ -417,16 +470,16 @@ void ui_menu_initial()
     KeyKeeper* pKk = KeyKeeper_Get();
     memset(pKk, 0, sizeof(*pKk));
 
-    // TODO: derive our master key
-    UintBig hv;
-    memset(&hv, 0, sizeof(hv));
-    Kdf_Init(&pKk->m_MasterKey, &hv);
+    if (InitMasterKey(N_iAccount))
+    {
+        UX_INIT();
+        if (!G_ux.stack_count)
+            ux_stack_push();
 
-    UX_INIT();
-    if (!G_ux.stack_count)
-        ux_stack_push();
-
-    ui_menu_main();
+        ui_menu_main();
+    }
+    else
+        halt();
 }
 
 

@@ -34,7 +34,7 @@ APPVERSION_P = 1
 APPVERSION   = "$(APPVERSION_M).$(APPVERSION_N).$(APPVERSION_P)"
 
 ifeq ($(TARGET_NAME),TARGET_NANOS)
-	APP_STACK_SIZE = 3212
+	APP_STACK_SIZE = 3200
     ICONNAME=icons/nanos_app_beam.gif
 else
     ICONNAME=icons/nanox_app_beam.gif
