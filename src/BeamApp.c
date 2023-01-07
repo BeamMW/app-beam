@@ -183,9 +183,10 @@ union
     struct {
 
         Amount m_Amount;
+        Amount m_Fee;
         AssetID m_Aid;
         const UintBig* m_pAddr;
-        const TxKernelUser* m_pUser;
+        //const TxKernelUser* m_pUser;
         uint32_t m_Flags;
         //const UintBig* m_pKrnID;
 
@@ -294,7 +295,7 @@ void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
 UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "send transaction" });
 UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), { "Amount", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pUser->m_Fee), { "Fee", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), { "Fee", g_szLine1 });
 UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address" });
 #ifdef TARGET_NANOSP
 UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pAddr), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
@@ -349,17 +350,18 @@ UX_FLOW(ux_flow_split,
 
 uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID, uint32_t nFlags)
 {
-    UNUSED(p);
     UNUSED(pKrnID);
+    UNUSED(pUser);
 
     if (c_KeyKeeper_ConfirmSpend_2ndPhase & nFlags)
         return c_KeyKeeper_Status_Ok; // Current decision: ask only on the 1st invocation. Final confirmation isn't needed.
 
 
     g_Ux_U.m_Spend.m_Amount = val;
+    g_Ux_U.m_Spend.m_Fee = p->u.m_TxBalance.m_TotalFee;
     g_Ux_U.m_Spend.m_Aid = aid;
     g_Ux_U.m_Spend.m_pAddr = pPeerID;
-    g_Ux_U.m_Spend.m_pUser = pUser;
+    //g_Ux_U.m_Spend.m_pUser = pUser;
     g_Ux_U.m_Spend.m_Flags = nFlags;
     //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
 
@@ -625,11 +627,6 @@ void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
     UintBig* pSlot = (UintBig*) (N_Slots.m_pSlot + iSlot);
 
     RegenerateSlot(pSlot);
-}
-
-Amount KeyKeeper_get_MaxShieldedFee()
-{
-    return 0;
 }
 
 int KeyKeeper_AllowWeakInputs(KeyKeeper* p)
