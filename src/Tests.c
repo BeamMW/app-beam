@@ -659,3 +659,83 @@ void BeamStackTest5()
     PRINTF("SendShielded_5, ret=%d, Data=%.*H\n", n, nOut, G_io_apdu_buffer);
     Alert("SendShielded_5", n);
 }
+
+bool VerifyStatus(cx_err_t errCode, const char* szName)
+{
+    if (!errCode)
+        return true;
+
+    Alert(szName, errCode);
+    return false;
+}
+
+#define VERIFY_STATUS(expr) VerifyStatus(expr, #expr)
+
+void BeamPerfTest()
+{
+    if (VERIFY_STATUS(cx_bn_lock(CX_BN_WORD_ALIGNEMENT, 0)))
+    {
+
+        cx_ecpoint_t pt1, pt2;
+        if (VERIFY_STATUS(cx_ecpoint_alloc(&pt1, CX_CURVE_SECP256K1)))
+        {
+            if (VERIFY_STATUS(cx_ecpoint_alloc(&pt2, CX_CURVE_SECP256K1)))
+            {
+                static const uint8_t x[32] = { 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98 };
+                static const uint8_t y[32] = { 0x48, 0x3A, 0xDA, 0x77, 0x26, 0xA3, 0xC4, 0x65, 0x5D, 0xA4, 0xFB, 0xFC, 0x0E, 0x11, 0x08, 0xA8, 0xFD, 0x17, 0xB4, 0x48, 0xA6, 0x85, 0x54, 0x19, 0x9C, 0x47, 0xD0, 0x8F, 0xFB, 0x10, 0xD4, 0xB8 };
+
+                if (VERIFY_STATUS(cx_ecpoint_init(&pt1, x, sizeof(x), y, sizeof(y))) && VERIFY_STATUS(cx_ecpoint_init(&pt2, x, sizeof(x), y, sizeof(y))))
+                {
+                    Alert("Mul1x100", 0);
+
+                    static const uint8_t pS1[] = { 0x77,0x03,0x8b,0x81,0x0c,0x1f,0x76,0x54,0xa8,0xda,0x42,0x8a,0x9c,0xd0,0x04,0x1c,0x22,0x11,0x64,0x6d,0x3a,0xd1,0xac,0xa3,0x34,0x31,0x76,0x8f,0x24,0x18,0x2d,0xa6 };
+                    static const uint8_t pS2[] = { 0xe0,0x84,0xa2,0x7d,0x3b,0xd6,0x75,0xf3,0xe2,0xca,0x05,0x6d,0x1b,0x5b,0x67,0xd6,0x6e,0xbd,0x05,0x45,0x0d,0xb8,0x04,0xd1,0x6d,0xef,0x6f,0xb1,0xe9,0x09,0xbc,0xc8 };
+                    static const uint8_t pS3[] = { 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,0xBA,0xAE,0xDC,0xE6,0xAF,0x48,0xA0,0x3B,0xBF,0xD2,0x5E,0x8C,0xD0,0x36,0x41,0x41 };
+
+                    for (int i = 0; i < 100; ++i)
+                    {
+                        if (!VERIFY_STATUS(cx_ecpoint_scalarmul(&pt1, pS1, sizeof(pS1))))
+                            break;
+                    }
+
+                    Alert("Mul1x100", 1);
+
+                    Alert("Mul2x100", 0);
+
+                    for (int i = 0; i < 100; ++i)
+                    {
+                        if (!VERIFY_STATUS(cx_ecpoint_double_scalarmul(&pt1, &pt1, &pt2, pS1, sizeof(pS1), pS2, sizeof(pS2))))
+                            break;
+                    }
+
+                    Alert("Mul2x100", 1);
+
+                    cx_bn_t f0=0, f1=0, f2=0, fMod = 0;
+                    VERIFY_STATUS(cx_bn_alloc(&f0, sizeof(pS1)));
+                    VERIFY_STATUS(cx_bn_alloc_init(&f1, sizeof(pS1), pS1, sizeof(pS1)));
+                    VERIFY_STATUS(cx_bn_alloc_init(&f2, sizeof(pS2), pS2, sizeof(pS2)));
+                    VERIFY_STATUS(cx_bn_alloc_init(&fMod, sizeof(pS3), pS3, sizeof(pS3)));
+
+                    Alert("scmulx10K", 0);
+
+                    for (int i = 0; i < 10000; ++i)
+                    {
+                        if (!VERIFY_STATUS(cx_bn_mod_mul(f0, f1, f2, fMod)))
+                            break;
+                    }
+
+                    Alert("scmulx10K", 1);
+
+                }
+
+
+                VERIFY_STATUS(cx_ecpoint_destroy(&pt2));
+            }
+            VERIFY_STATUS(cx_ecpoint_destroy(&pt1));
+        }
+
+
+        VERIFY_STATUS(cx_bn_unlock());
+    }
+
+}
