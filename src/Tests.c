@@ -208,7 +208,7 @@ void BeamStackTest1()
     StackPrint(&u, "CoinID_getCommRaw without aid");
 
     StackMark();
-    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
+    CoinID_getSkComm(&u.p3.kdf, &u.p3.cid, &u.p3.s, 0);
     StackPrint(&u, "CoinID_getSk without aid");
 
 
@@ -219,7 +219,7 @@ void BeamStackTest1()
     StackPrint(&u, "CoinID_getCommRaw with aid");
 
     StackMark();
-    CoinID_getSk(&u.p3.kdf, &u.p3.cid, &u.p3.s);
+    CoinID_getSkComm(&u.p3.kdf, &u.p3.cid, &u.p3.s, 0);
     StackPrint(&u, "CoinID_getSk with aid");
 
     memset(&u.p4, 0, sizeof(u.p4));
