@@ -70,6 +70,32 @@ typedef uint32_t secp256k1_scalar_uint;
 
 #define secp256k1_scalar_WordBits (sizeof(secp256k1_scalar_uint) * 8)
 
+#ifdef TARGET_NANOS
+
+uint16_t g_SufferPoints = 0;
+
+void OnSuffered();
+
+void Suffer(uint16_t n)
+{
+	if (g_SufferPoints)
+	{
+		g_SufferPoints += n;
+		if (g_SufferPoints >= 2000)
+		{
+			g_SufferPoints = 1;
+			OnSuffered();
+		}
+	}
+}
+
+#else // TARGET_NANOS
+
+void Suffer(uint16_t n)
+{
+}
+
+#endif // TARGET_NANOS
 
 
 //////////////////////////////
@@ -259,18 +285,21 @@ __stack_hungry__
 static void wrap_gej_add_ge_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_ge_var(r, a, b, 0 /* rzr */);
+	Suffer(12); // 9 mul, 3 sqr
 }
 
 __stack_hungry__
 static void wrap_gej_add_zinv_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b, const secp256k1_fe* bzinv)
 {
 	secp256k1_gej_add_zinv_var(r, a, b, bzinv);
+	Suffer(13); // 10 mul, 3 sqr
 }
 
 __stack_hungry__
 static void wrap_gej_add_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_gej* b /*, secp256k1_fe* rzr */)
 {
 	secp256k1_gej_add_var(r, a, b, 0 /* rzr */);
+	Suffer(16); // 12 mul, 4 sqr
 }
 
 __stack_hungry__
@@ -278,6 +307,25 @@ static int wrap_scalar_add(secp256k1_scalar* r, const secp256k1_scalar* a, const
 {
 	return secp256k1_scalar_add(r, a, b);
 }
+
+static void wrap_scalar_mul(secp256k1_scalar* r, const secp256k1_scalar* a, const secp256k1_scalar* b)
+{
+	secp256k1_scalar_mul(r, a, b);
+	Suffer(2); // assume scalar multiplication is less optimized than fe
+}
+
+static void wrap_scalar_inverse(secp256k1_scalar* r, const secp256k1_scalar* a)
+{
+	secp256k1_scalar_inverse(r, a);
+	Suffer(1000); // very heavy
+}
+
+static void wrap_fe_mul(secp256k1_fe* r, const secp256k1_fe* a, const secp256k1_fe* b)
+{
+	secp256k1_fe_mul(r, a, b);
+	Suffer(1);
+}
+
 
 __stack_hungry__
 static void wrap_ge_neg(secp256k1_ge* r, const secp256k1_ge* a)
@@ -289,6 +337,7 @@ __stack_hungry__
 static void wrap_gej_double_var(secp256k1_gej* r, const secp256k1_gej* a/*, secp256k1_fe* rzr*/)
 {
 	secp256k1_gej_double_var(r, a, 0 /* rzr */);
+	Suffer(7); // 3 mul, 4 sqr
 }
 
 __stack_hungry__
@@ -405,7 +454,7 @@ static void MultiMac_Calculate_PostPhase(const MultiMac_Context* p)
 {
 	if (p->m_Fast.m_pZDenom)
 		// fix denominator
-		secp256k1_fe_mul(&p->m_pRes->z, &p->m_pRes->z, p->m_Fast.m_pZDenom);
+		wrap_fe_mul(&p->m_pRes->z, &p->m_pRes->z, p->m_Fast.m_pZDenom);
 
 	for (unsigned int i = 0; i < p->m_Secure.m_Count; i++)
 	{
@@ -447,10 +496,11 @@ static void secp256k1_gej_rescale_To_ge(secp256k1_gej* pGej, const secp256k1_fe*
 
 	secp256k1_fe zz;
 	secp256k1_fe_sqr(&zz, pZ);
+	Suffer(1);
 
-	secp256k1_fe_mul(&pGe->x, &pGej->x, &zz);
-	secp256k1_fe_mul(&pGe->y, &pGej->y, &zz);
-	secp256k1_fe_mul(&pGe->y, &pGej->y, pZ);
+	wrap_fe_mul(&pGe->x, &pGej->x, &zz);
+	wrap_fe_mul(&pGe->y, &pGej->y, &zz);
+	wrap_fe_mul(&pGe->y, &pGej->y, pZ);
 
 	pGe->infinity = 0;
 }
@@ -467,7 +517,7 @@ void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1
 		}
 
 		if (iPrev >= 0)
-			secp256k1_fe_mul(pBuf + i, pBuf + iPrev, &pGej[i].z);
+			wrap_fe_mul(pBuf + i, pBuf + iPrev, &pGej[i].z);
 		else
 			pBuf[i] = pGej[i].z;
 
@@ -478,7 +528,10 @@ void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1
 		return; // all are zero
 
 	if (bNormalize)
+	{
 		secp256k1_fe_inv(pZDenom, pBuf + iPrev); // the only expensive call
+		Suffer(1000); // Very heavy
+	}
 	else
 		secp256k1_fe_set_int(pZDenom, 1); // can be arbitrary
 
@@ -490,8 +543,8 @@ void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1
 
 		if (iPrev >= 0)
 		{
-			secp256k1_fe_mul(pBuf + iPrev, pBuf + i, pZDenom);
-			secp256k1_fe_mul(pZDenom, pZDenom, &pGej[iPrev].z);
+			wrap_fe_mul(pBuf + iPrev, pBuf + i, pZDenom);
+			wrap_fe_mul(pZDenom, pZDenom, &pGej[iPrev].z);
 
 			secp256k1_gej_rescale_To_ge(pGej + iPrev, pBuf + iPrev);
 		}
@@ -512,7 +565,7 @@ void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1
 	else
 	{
 		pBuf[iPrev] = *pZDenom;
-		secp256k1_fe_mul(pZDenom, pZDenom, &pGej[iPrev].z);
+		wrap_fe_mul(pZDenom, pZDenom, &pGej[iPrev].z);
 
 		secp256k1_gej_rescale_To_ge(pGej + iPrev, pBuf + iPrev);
 	}
@@ -709,6 +762,7 @@ int Point_Ge_from_Compact(secp256k1_ge* pGe, const CompactPoint* pCompact)
 void Point_Ge_from_Gej(secp256k1_ge* pGe, const secp256k1_gej* pGej)
 {
 	secp256k1_ge_set_gej_var(pGe, (secp256k1_gej*) pGej); // expensive, better to a batch convertion
+	Suffer(1000); // Very heavy
 }
 
 void MulPoint(secp256k1_gej* pGej, const MultiMac_Secure* pGen, const secp256k1_scalar* pK)
@@ -942,7 +996,7 @@ void Kdf_Derive_PKey(const Kdf* p, const UintBig* pHv, secp256k1_scalar* pK)
 void Kdf_Derive_SKey(const Kdf* p, const UintBig* pHv, secp256k1_scalar* pK)
 {
 	Kdf_Derive_PKey(p, pHv, pK);
-	secp256k1_scalar_mul(pK, pK, &p->m_kCoFactor);
+	wrap_scalar_mul(pK, pK, &p->m_kCoFactor);
 }
 
 #define ARRAY_ELEMENT_SAFE(arr, index) ((arr)[(((index) < _countof(arr)) ? (index) : (_countof(arr) - 1))])
@@ -1403,15 +1457,17 @@ static int RangeProof_Calculate_After_S(RangeProof* const p, RangeProof_Worker* 
 		Oracle_NextScalar(&oracle, &xChallenge);
 
 		// m_TauX = tau2*x^2 + tau1*x + sk*z^2
-		secp256k1_scalar_mul(pK, pK, &xChallenge); // tau1*x
-		secp256k1_scalar_mul(&xChallenge, &xChallenge, &xChallenge); // x^2
-		secp256k1_scalar_mul(pK + 1, pK + 1, &xChallenge); // tau2*x^2
+		wrap_scalar_mul(pK, pK, &xChallenge); // tau1*x
+		wrap_scalar_mul(&xChallenge, &xChallenge, &xChallenge); // x^2
+		wrap_scalar_mul(pK + 1, pK + 1, &xChallenge); // tau2*x^2
 
-		secp256k1_scalar_mul(&zChallenge, &zChallenge, &zChallenge); // z^2
+		wrap_scalar_mul(&zChallenge, &zChallenge, &zChallenge); // z^2
 
-		secp256k1_scalar_mul(p->m_pTauX, &pWrk->m_sk, &zChallenge); // sk*z^2
+		wrap_scalar_mul(p->m_pTauX, &pWrk->m_sk, &zChallenge); // sk*z^2
 		secp256k1_scalar_add(p->m_pTauX, p->m_pTauX, pK);
 		secp256k1_scalar_add(p->m_pTauX, p->m_pTauX, pK + 1);
+
+		Suffer(10); // 5 scalar muls
 	}
 
 	SECURE_ERASE_OBJ(pWrk->m_sk);
@@ -1479,7 +1535,7 @@ static void RangeProof_Recover_Init(const RangeProof_Packed* pRangeproof, Oracle
 	secp256k1_sha256_write_CompactPointEx(&pOracle->m_sha, &pRangeproof->m_T2x, pRangeproof->m_pYs[1] >> 7);
 	Oracle_NextScalar(pOracle, &pRep->x);
 
-	secp256k1_scalar_mul(&pRep->zz, &pRep->z, &pRep->z); // z^2
+	wrap_scalar_mul(&pRep->zz, &pRep->z, &pRep->z); // z^2
 
 
 	static_assert(sizeof(pRangeproof->m_pLRx) == sizeof(pRep->m_pE), "");
@@ -1490,7 +1546,7 @@ static void RangeProof_Recover_Init(const RangeProof_Packed* pRangeproof, Oracle
 	for (uint32_t iCycle = 0; iCycle < _countof(pRangeproof->m_pLRx); iCycle++)
 	{
 		Oracle_NextScalar(pOracle, pRep->m_pE[0] + iCycle); // challenge
-		secp256k1_scalar_inverse(pRep->m_pE[1] + iCycle, pRep->m_pE[0] + iCycle);
+		wrap_scalar_inverse(pRep->m_pE[1] + iCycle, pRep->m_pE[0] + iCycle);
 
 		for (uint32_t j = 0; j < 2; j++)
 		{
@@ -1524,7 +1580,7 @@ static int RangeProof_Recover1(RangeProof_Recovery_Context* pCtx)
 	// m_Mu = alpha + ro*x
 	// alpha = m_Mu - ro*x = alpha_minus_params + params
 	// params = m_Mu - ro*x - alpha_minus_params
-	secp256k1_scalar_mul(&ro, &ro, &pRep->x);
+	wrap_scalar_mul(&ro, &ro, &pRep->x);
 	secp256k1_scalar_add(&tmp, &alpha_minus_params, &ro);
 	secp256k1_scalar_negate(&tmp, &tmp); // - ro*x - alpha_minus_params
 
@@ -1592,15 +1648,15 @@ static void RangeProof_Recover2(RangeProof_Recovery_Context* pCtx)
 		NonceGenerator_NextScalar(&ngSk, &tau2);
 	}
 
-	secp256k1_scalar_mul(&tau2, &tau2, &pRep->x);
+	wrap_scalar_mul(&tau2, &tau2, &pRep->x);
 	secp256k1_scalar_add(&tau2, &tau2, &tau1);
-	secp256k1_scalar_mul(&tau2, &tau2, &pRep->x); // tau2*x^2 + tau1*x
+	wrap_scalar_mul(&tau2, &tau2, &pRep->x); // tau2*x^2 + tau1*x
 
 	secp256k1_scalar_negate(&tau2, &tau2);
 	secp256k1_scalar_add(&pCtx->m_Sk, &pCtx->m_Sk, &tau2);
 
-	secp256k1_scalar_inverse(&tau2, &pRep->zz); // heavy operation
-	secp256k1_scalar_mul(&pCtx->m_Sk, &pCtx->m_Sk, &tau2);
+	wrap_scalar_inverse(&tau2, &pRep->zz); // heavy operation
+	wrap_scalar_mul(&pCtx->m_Sk, &pCtx->m_Sk, &tau2);
 }
 
 __stack_hungry__
@@ -1637,19 +1693,19 @@ static void RangeProof_Recover3(RangeProof_Recovery_Context* pCtx)
 
 			if (j)
 			{
-				secp256k1_scalar_mul(&val, &val, &pRep->x); // pS[i] *= x;
-				secp256k1_scalar_mul(&val, &val, &yPwr); // pS[i] *= yPwr;
+				wrap_scalar_mul(&val, &val, &pRep->x); // pS[i] *= x;
+				wrap_scalar_mul(&val, &val, &yPwr); // pS[i] *= yPwr;
 
-				secp256k1_scalar_mul(&tmp2, pZ[!bit], &yPwr);
+				wrap_scalar_mul(&tmp2, pZ[!bit], &yPwr);
 				secp256k1_scalar_add(&tmp2, &tmp2, &zzTwoPwr);
 				secp256k1_scalar_add(&val, &val, &tmp2); // pS[i] += pZ[!bit]*yPwr + z^2*2^i
 
-				secp256k1_scalar_mul(&zzTwoPwr, &zzTwoPwr, &two); // x2
-				secp256k1_scalar_mul(&yPwr, &yPwr, &pRep->y);
+				wrap_scalar_mul(&zzTwoPwr, &zzTwoPwr, &two); // x2
+				wrap_scalar_mul(&yPwr, &yPwr, &pRep->y);
 			}
 			else
 			{
-				secp256k1_scalar_mul(&val, &val, &pRep->x); // pS[i] *= x;
+				wrap_scalar_mul(&val, &val, &pRep->x); // pS[i] *= x;
 
 				secp256k1_scalar_negate(&tmp2, pZ[bit]);
 				secp256k1_scalar_add(&val, &val, &tmp2); // pS[i] -= pZ[bit];
@@ -1657,10 +1713,10 @@ static void RangeProof_Recover3(RangeProof_Recovery_Context* pCtx)
 
 			// 1st condensation in-place
 			if (i < nDims / 2)
-				secp256k1_scalar_mul(pS + i, &val, pRep->m_pE[j]);
+				wrap_scalar_mul(pS + i, &val, pRep->m_pE[j]);
 			else
 			{
-				secp256k1_scalar_mul(&val, &val, pRep->m_pE[!j]);
+				wrap_scalar_mul(&val, &val, pRep->m_pE[!j]);
 				secp256k1_scalar_add(pS + i - nDims / 2, pS + i - nDims / 2, &val);
 			}
 		}
@@ -1674,8 +1730,8 @@ static void RangeProof_Recover3(RangeProof_Recovery_Context* pCtx)
 
 			for (uint32_t i = 0; i < nStep; i++)
 			{
-				secp256k1_scalar_mul(pS + i, pS + i, pRep->m_pE[j] + iCycle);
-				secp256k1_scalar_mul(pS + nStep + i, pS + nStep + i, pRep->m_pE[!j] + iCycle);
+				wrap_scalar_mul(pS + i, pS + i, pRep->m_pE[j] + iCycle);
+				wrap_scalar_mul(pS + nStep + i, pS + nStep + i, pRep->m_pE[!j] + iCycle);
 				secp256k1_scalar_add(pS + i, pS + i, pS + nStep + i);
 			}
 
@@ -1690,10 +1746,10 @@ static void RangeProof_Recover3(RangeProof_Recovery_Context* pCtx)
 		// now let's estimate the difference that would be if extra == 1.
 		pS[1] = pRep->x;
 		for (uint32_t iCycle = 0; iCycle < 6; iCycle++)
-			secp256k1_scalar_mul(pS + 1, pS + 1, pRep->m_pE[j] + iCycle);
+			wrap_scalar_mul(pS + 1, pS + 1, pRep->m_pE[j] + iCycle);
 
-		secp256k1_scalar_inverse(pCtx->m_pExtra + j, pS + 1);
-		secp256k1_scalar_mul(pCtx->m_pExtra + j, pCtx->m_pExtra + j, pS);
+		wrap_scalar_inverse(pCtx->m_pExtra + j, pS + 1);
+		wrap_scalar_mul(pCtx->m_pExtra + j, pCtx->m_pExtra + j, pS);
 	}
 
 }
@@ -1759,7 +1815,7 @@ __stack_hungry__
 void Signature_SignPartialEx(UintBig* pRes, const secp256k1_scalar* pE, const secp256k1_scalar* pSk, const secp256k1_scalar* pNonce)
 {
 	secp256k1_scalar k;
-	secp256k1_scalar_mul(&k, pE, pSk);
+	wrap_scalar_mul(&k, pE, pSk);
 	secp256k1_scalar_add(&k, &k, pNonce);
 	secp256k1_scalar_negate(&k, &k);
 
@@ -2871,7 +2927,7 @@ static void ShieldedViewerInit(ShieldedViewer* pRes, uint32_t iViewer, const Key
 	secp256k1_scalar_get_b32(hv.m_pVal, &sk);
 
 	Kdf_Init(&pRes->m_Ser, &hv);
-	secp256k1_scalar_mul(&pRes->m_Ser.m_kCoFactor, &pRes->m_Ser.m_kCoFactor, &sk);
+	wrap_scalar_mul(&pRes->m_Ser.m_kCoFactor, &pRes->m_Ser.m_kCoFactor, &sk);
 }
 
 static void MulGJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
@@ -2968,8 +3024,8 @@ static void CreateVoucherInternal(ShieldedVoucher* pRes, const UintBig* pNonce, 
 	secp256k1_sha256_finalize(&oracle.m_sha, hv.m_pVal);
 	Kdf_Derive_SKey(&pViewer->m_Gen, &hv, &sk); // DH multiplier
 
-	secp256k1_scalar_mul(pN, pK, &sk);
-	secp256k1_scalar_mul(pN + 1, pK + 1, &sk);
+	wrap_scalar_mul(pN, pK, &sk);
+	wrap_scalar_mul(pN + 1, pK + 1, &sk);
 	MulGJ(&gej, pN); // shared point
 
 	ShieldedHashTxt(&oracle.m_sha);
@@ -3192,12 +3248,12 @@ PROTO_METHOD(CreateShieldedInput_2)
 		// 1st challenge
 		Oracle_NextScalar(&o2, &e);
 
-		secp256k1_scalar_mul(&e, &p->u.m_Ins.m_skOutp, &e);
+		wrap_scalar_mul(&e, &p->u.m_Ins.m_skOutp, &e);
 		secp256k1_scalar_add(&k, &k, &e); // nG += skOutp * e
 
 		// 2nd challenge
 		Oracle_NextScalar(&o2, &e);
-		secp256k1_scalar_mul(&e, &p->u.m_Ins.m_skSpend, &e);
+		wrap_scalar_mul(&e, &p->u.m_Ins.m_skSpend, &e);
 		secp256k1_scalar_add(&k, &k, &e); // nG += skSpend * e
 
 		// to sig
@@ -3302,12 +3358,12 @@ PROTO_METHOD(CreateShieldedInput_4)
 	for (uint32_t i = 1; i < nRemaining; i++)
 	{
 		if (i == nRemaining - 1)
-			secp256k1_scalar_mul(&k, &k, &xPwr); // tau * e^(N-1)
+			wrap_scalar_mul(&k, &k, &xPwr); // tau * e^(N-1)
 
-		secp256k1_scalar_mul(&xPwr, &xPwr, &e);
+		wrap_scalar_mul(&xPwr, &xPwr, &e);
 	}
 
-	secp256k1_scalar_mul(&xPwr, &p->u.m_Ins.m_skOutp, &xPwr); // sk * e^N
+	wrap_scalar_mul(&xPwr, &p->u.m_Ins.m_skOutp, &xPwr); // sk * e^N
 
 	secp256k1_scalar_add(&k, &k, &xPwr); // sk * e^N + tau * e^(N-1)
 	secp256k1_scalar_negate(&k, &k);
@@ -3520,7 +3576,7 @@ uint16_t TxSendShielded_VerifyParams3(TxSendShieldedContext* pCtx, TxSendShielde
 		NonceGenerator_NextScalar(&ng, pRp->u.m_RCtx.m_pExtra);
 
 		secp256k1_scalar_set_u64(pRp->u.m_RCtx.m_pExtra + 1, pCtx->m_Amount);
-		secp256k1_scalar_mul(pRp->u.m_RCtx.m_pExtra, pRp->u.m_RCtx.m_pExtra, pRp->u.m_RCtx.m_pExtra + 1);
+		wrap_scalar_mul(pRp->u.m_RCtx.m_pExtra, pRp->u.m_RCtx.m_pExtra, pRp->u.m_RCtx.m_pExtra + 1);
 		secp256k1_scalar_add(&pRp->u.m_RCtx.m_Sk, &pRp->u.m_RCtx.m_Sk, pRp->u.m_RCtx.m_pExtra);
 	}
 

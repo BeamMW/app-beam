@@ -520,38 +520,6 @@ uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const Uin
 }
 
 
-
-//////////////////////
-// progr
-/*
-UX_STEP_NOCB(ux_step_progr, nn, { "Total added", g_szLine1 });
-
-UX_FLOW(ux_flow_progr,
-    &ux_step_progr);
-
-uint32_t g_EccAdded = 0;
-
-void WaitDisplayed();
-
-void UpdProgr()
-{
-    PrintDecimalAuto(g_szLine1, g_EccAdded);
-
-    ux_flow_init(0, ux_flow_progr, NULL);
-    WaitDisplayed();
-}
-
-__attribute__((noinline))
-void OnEccPointAdd()
-{
-    g_EccAdded++;
-
-    if (!(g_EccAdded % 500))
-        UpdProgr();
-}
-*/
-
-
 __attribute__((noinline))
 bool InitMasterKey()
 {
@@ -857,8 +825,52 @@ void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint
 
 #endif // BeamCrypto_ScarceStack
 
+
+
+//////////////////////
+// Suffer notification
+#ifdef TARGET_NANOS
+
+extern uint16_t g_SufferPoints;
+uint8_t g_SufferFlag = 0;
+
+UX_STEP_NOCB(ux_step_suffer, nn, { "Computing...", g_szLine1 });
+
+UX_FLOW(ux_flow_suffer,
+    &ux_step_suffer);
+
+void WaitDisplayed();
+
+void OnSuffered()
+{
+    if (g_SufferFlag)
+    {
+        g_SufferFlag |= 2;
+
+        uint8_t iIdx = g_SufferFlag >> 2;
+        PRINTF("** Suffer idx=%u\n", iIdx);
+
+        memset(g_szLine1, '.', iIdx);
+        g_szLine1[iIdx] = 0;
+
+        ux_flow_init(0, ux_flow_suffer, NULL);
+        WaitDisplayed();
+
+        iIdx = (iIdx + 1) % 20;
+        g_SufferFlag = (3 & g_SufferFlag) | (iIdx << 2);
+    }
+}
+
+#endif // TARGET_NANOS
+
+
 void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
 {
+#ifdef TARGET_NANOS
+    g_SufferFlag = 1;
+    g_SufferPoints = 1500;
+#endif // TARGET_NANOS
+
     uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pBuf, nIn, pBuf, pOut);
     if (c_KeyKeeper_Status_Ok == errCode)
         pBuf[0] = c_KeyKeeper_Status_Ok;
@@ -871,6 +883,18 @@ void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
         pBuf[3] = 'F';
         *pOut = 4;
     }
+
+#ifdef TARGET_NANOS
+
+    if (2 & g_SufferFlag)
+    {
+        PRINTF("** Suffer end\n", iIdx);
+        ui_menu_main();
+    }
+
+    g_SufferFlag = 0;
+
+#endif // TARGET_NANOS
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
