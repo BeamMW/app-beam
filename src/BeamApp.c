@@ -192,6 +192,11 @@ union
 
     } m_Spend;
 
+    struct {
+        uint32_t m_Number;
+        uint8_t m_Step;
+    } m_Account;
+
 } g_Ux_U;
 
 void PrintAddr_2Line(const UintBig* pAddr, uint32_t iStep)
@@ -236,9 +241,7 @@ volatile static const struct
 
 } N_Global __attribute__((aligned(64)));
 
-
-
-bool InitMasterKey(uint32_t iAccount);
+bool InitMasterKey();
 
 /////////////////////////////////////
 // ui About
@@ -260,14 +263,94 @@ void ui_menu_about()
 }
 
 /////////////////////////////////////
+// ui Account
+void PrintAccountNumber(char* sz, uint32_t iAccount)
+{
+    if (iAccount)
+    {
+        static const char s_szPrefix[] = "Account ";
+        memcpy(sz, s_szPrefix, sizeof(s_szPrefix));
+
+        PrintDecimalAuto(sz + sizeof(s_szPrefix) - 1, iAccount);
+    }
+    else
+    {
+        static const char s_szAccountDefault[] = "Default Account";
+        memcpy(sz, s_szAccountDefault, sizeof(s_szAccountDefault));
+    }
+}
+
+void OnAccountMove(uint8_t n)
+{
+    if (n != g_Ux_U.m_Account.m_Step)
+    {
+        uint8_t nDelta = (n + 3 - g_Ux_U.m_Account.m_Step) % 3;
+        g_Ux_U.m_Account.m_Step = n;
+
+        if (1 != nDelta)
+            nDelta = 99;
+
+        g_Ux_U.m_Account.m_Number = (g_Ux_U.m_Account.m_Number + nDelta) % 100;
+        PRINTF("Account=%u\n", g_Ux_U.m_Account.m_Number);
+    }
+
+    PrintAccountNumber(g_szLine2, g_Ux_U.m_Account.m_Number);
+}
+
+UX_STEP_CB_INIT(ux_step_account_0, pnn, OnAccountMove(0), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
+UX_STEP_CB_INIT(ux_step_account_1, pnn, OnAccountMove(1), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
+UX_STEP_CB_INIT(ux_step_account_2, pnn, OnAccountMove(2), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
+
+UX_FLOW(ux_flow_account,
+    &ux_step_account_0,
+    &ux_step_account_1,
+    &ux_step_account_2,
+    FLOW_LOOP);
+
+void ui_menu_main_account();
+
+void ui_menu_account()
+{
+    g_Ux_U.m_Account.m_Number = N_Global.m_iAccount;
+    g_Ux_U.m_Account.m_Step = 0;
+
+    ux_flow_init(0, ux_flow_account, 0);
+    uint8_t res = DoModal();
+
+    if (c_Modal_Ok == res)
+    {
+        nvm_write((void*) &N_Global.m_iAccount, &g_Ux_U.m_Account.m_Number, sizeof(g_Ux_U.m_Account.m_Number));
+        InitMasterKey();
+    }
+
+    ui_menu_main_account();
+}
+
+/////////////////////////////////////
 // ui Main
-UX_STEP_NOCB(ux_step_main_ready, pnn, { &C_beam_logo, "Beam", "is ready" });
+void OnMainAccount()
+{
+    UintBig hv;
+    secp256k1_scalar sk;
+
+    void DeriveAddress(const KeyKeeper* p, AddrID addrID, secp256k1_scalar * pKey, UintBig * pAddr);
+    DeriveAddress(KeyKeeper_Get(), 0, &sk, &hv);
+    SecureEraseMem(&sk, sizeof(sk));
+
+    PrintAccountNumber(g_szLine1, N_Global.m_iAccount);
+
+    PrintHex(g_szLine2, hv.m_pVal, 8);
+}
+
+UX_STEP_NOCB(ux_step_main_ready, pnn, { &C_beam_logo, "Beam", "is ready" }); 
+UX_STEP_CB_INIT(ux_step_main_account, nn, OnMainAccount(), ui_menu_account(), { g_szLine1, g_szLine2 });
 UX_STEP_NOCB(ux_step_main_version, bn, { "Version", APPVERSION });
 UX_STEP_CB(ux_step_main_about, pb, ui_menu_about(), { &C_icon_certificate, "About" });
 UX_STEP_VALID(ux_step_main_quit, pb, os_sched_exit(-1), { &C_icon_dashboard_x, "Quit" });
 
 UX_FLOW(ux_flow_main,
     &ux_step_main_ready,
+    &ux_step_main_account,
     &ux_step_main_version,
     &ux_step_main_about,
     &ux_step_main_quit,
@@ -276,6 +359,11 @@ UX_FLOW(ux_flow_main,
 void ui_menu_main()
 {
     ux_flow_init(0, ux_flow_main, NULL);
+}
+
+void ui_menu_main_account()
+{
+    ux_flow_init(0, ux_flow_main, &ux_step_main_account);
 }
 
 void ui_menu_main_about()
@@ -433,8 +521,10 @@ void OnEccPointAdd()
 
 
 __attribute__((noinline))
-bool InitMasterKey(uint32_t iAccount)
+bool InitMasterKey()
 {
+    uint32_t iAccount = N_Global.m_iAccount;
+
 #define HARDENED_PATH_MASK 0x80000000
 
     uint32_t pBip44[5] = {
@@ -489,7 +579,7 @@ void ui_menu_initial()
     KeyKeeper* pKk = KeyKeeper_Get();
     memset(pKk, 0, sizeof(*pKk));
 
-    if (InitMasterKey(N_Global.m_iAccount))
+    if (InitMasterKey())
     {
         UX_INIT();
         if (!G_ux.stack_count)
