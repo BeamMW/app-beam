@@ -218,6 +218,19 @@ void PrintAddr_4Line(const UintBig* pAddr)
 
 #endif
 
+void PrintTxType(char* sz)
+{
+    if (c_KeyKeeper_ConfirmSpend_Shielded & g_Ux_U.m_Spend.m_Flags)
+    {
+        static const char s_szType[] = "Lelantus-MW";
+        memcpy(sz, s_szType, sizeof(s_szType));
+    }
+    else
+    {
+        static const char s_szType[] = "Mimble-Wimble";
+        memcpy(sz, s_szType, sizeof(s_szType));
+    }
+}
 
 KeyKeeper g_KeyKeeper;
 KeyKeeper* KeyKeeper_Get()
@@ -408,9 +421,15 @@ void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
 //////////////////////
 // Confirm Spend
 UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "send transaction" });
+#ifdef TARGET_NANOSP
+UX_STEP_NOCB_INIT(ux_step_send_amount_asset, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), PrintAssetID(g_szLine2, g_Ux_U.m_Spend.m_Aid)), { "Amount", g_szLine1, "Asset", g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_fee_type, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), PrintTxType(g_szLine2)), { "Fee", g_szLine1, "Type", g_szLine2 });
+#else // TARGET_NANOSP
 UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), { "Amount", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), { "Fee", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_type, bn, PrintTxType(g_szLine1), { "Type", g_szLine1 });
+#endif // TARGET_NANOSP
 UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address" });
 #ifdef TARGET_NANOSP
 UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pAddr), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
@@ -430,9 +449,15 @@ UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmar
 
 UX_FLOW(ux_flow_send,
     &ux_step_send_review,
+#ifdef TARGET_NANOSP
+    & ux_step_send_amount_asset,
+    & ux_step_send_fee_type,
+#else // TARGET_NANOSP
     &ux_step_send_amount,
     &ux_step_send_asset,
-    &ux_step_send_fee,
+    & ux_step_send_fee,
+    & ux_step_send_type,
+#endif // TARGET_NANOSP
     &ux_step_send_receiver,
 #ifdef TARGET_NANOSP
     & ux_step_send_receiver_x,
@@ -447,21 +472,28 @@ UX_FLOW(ux_flow_send,
 //    & ux_step_send_krnid_1,
 //    & ux_step_send_krnid_2,
 //#endif // TARGET_NANOSP
-    &ux_step_send_Ok);
+    & ux_step_send_Ok,
+    &ux_step_send_Cancel);
 
 UX_STEP_NOCB(ux_step_split_review, bb, { "Please review", "Split transaction" });
 
 UX_FLOW(ux_flow_split,
     &ux_step_split_review,
-    &ux_step_send_fee,
-//    &ux_step_send_krnid,
+#ifdef TARGET_NANOSP
+    & ux_step_send_fee_type,
+#else // TARGET_NANOSP
+    & ux_step_send_fee,
+    & ux_step_send_type,
+#endif // TARGET_NANOSP
+    //    &ux_step_send_krnid,
 //#ifdef TARGET_NANOSP
 //    & ux_step_send_krnid_x,
 //#else // TARGET_NANOSP
 //    & ux_step_send_krnid_1,
 //    & ux_step_send_krnid_2,
 //#endif // TARGET_NANOSP
-    &ux_step_send_Ok);
+    &ux_step_send_Ok,
+    & ux_step_send_Cancel);
 
 uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID, uint32_t nFlags)
 {
