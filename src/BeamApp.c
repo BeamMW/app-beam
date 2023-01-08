@@ -213,6 +213,33 @@ void PrintAddr_4Line(const UintBig* pAddr)
 
 #endif
 
+
+KeyKeeper g_KeyKeeper;
+KeyKeeper* KeyKeeper_Get()
+{
+    return &g_KeyKeeper;
+}
+
+#define c_KeyKeeper_Slots 16
+
+volatile static const struct
+{
+    UintBig m_pSlot[c_KeyKeeper_Slots];
+
+    uint32_t m_iAccount;
+
+#ifdef BeamCrypto_ScarceStack
+    KeyKeeper_AuxBuf m_AuxBuf; // goes to nvrom
+#else // BeamCrypto_ScarceStack
+#endif // BeamCrypto_ScarceStack
+
+
+} N_Global __attribute__((aligned(64)));
+
+
+
+bool InitMasterKey(uint32_t iAccount);
+
 /////////////////////////////////////
 // ui About
 void ui_menu_main_about();
@@ -404,14 +431,6 @@ void OnEccPointAdd()
 }
 */
 
-KeyKeeper g_KeyKeeper;
-KeyKeeper* KeyKeeper_Get()
-{
-    return &g_KeyKeeper;
-}
-
-static const uint32_t N_iAccount = 0; // goes to nvrom
-
 
 __attribute__((noinline))
 bool InitMasterKey(uint32_t iAccount)
@@ -470,7 +489,7 @@ void ui_menu_initial()
     KeyKeeper* pKk = KeyKeeper_Get();
     memset(pKk, 0, sizeof(*pKk));
 
-    if (InitMasterKey(N_iAccount))
+    if (InitMasterKey(N_Global.m_iAccount))
     {
         UX_INIT();
         if (!G_ux.stack_count)
@@ -629,14 +648,6 @@ void SecureEraseMem(void* p, uint32_t n)
 
 /////////////////////////////////////
 // Slots
-#define c_KeyKeeper_Slots 16
-typedef struct
-{
-    UintBig m_pSlot[c_KeyKeeper_Slots];
-} KeyKeeperSlots;
-
-static const KeyKeeperSlots N_Slots; // goes to nvrom
-
 uint32_t KeyKeeper_getNumSlots()
 {
 	return c_KeyKeeper_Slots;
@@ -664,7 +675,7 @@ void KeyKeeper_ReadSlot(KeyKeeper* p, uint32_t iSlot, UintBig* pRes)
 {
     UNUSED(p);
     assert(iSlot < c_KeyKeeper_Slots);
-    UintBig* pSlot = (UintBig*) (N_Slots.m_pSlot + iSlot);
+    UintBig* pSlot = (UintBig*) (N_Global.m_pSlot + iSlot);
 
     if (IsUintBigZero(pSlot))
         RegenerateSlot(pSlot); // 1st-time access
@@ -677,7 +688,7 @@ void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
 {
     UNUSED(p);
     assert(iSlot < c_KeyKeeper_Slots);
-    UintBig* pSlot = (UintBig*) (N_Slots.m_pSlot + iSlot);
+    UintBig* pSlot = (UintBig*) (N_Global.m_pSlot + iSlot);
 
     RegenerateSlot(pSlot);
 }
@@ -686,12 +697,10 @@ void KeyKeeper_RegenerateSlot(KeyKeeper* p, uint32_t iSlot)
 // AuxBuf
 #ifdef BeamCrypto_ScarceStack
 
-static const KeyKeeper_AuxBuf N_AuxBuf; // goes to nvrom
-
 const KeyKeeper_AuxBuf* KeyKeeper_GetAuxBuf(KeyKeeper* pKk)
 {
     UNUSED(pKk);
-    return &N_AuxBuf;
+    return (const KeyKeeper_AuxBuf*) &N_Global.m_AuxBuf;
 }
 
 void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint32_t nSize)
@@ -699,7 +708,7 @@ void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint
     UNUSED(pKk);
     assert(nOffset + nSize <= sizeof(KeyKeeper_AuxBuf));
 
-    uint8_t* pDst = (uint8_t*) &N_AuxBuf;
+    uint8_t* pDst = (uint8_t*) &N_Global.m_AuxBuf;
 
     nvm_write(pDst + nOffset, (void*) p, nSize);
 }
