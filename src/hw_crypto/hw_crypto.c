@@ -93,6 +93,7 @@ void Suffer(uint16_t n)
 
 void Suffer(uint16_t n)
 {
+	UNUSED(n);
 }
 
 #endif // TARGET_NANOS
@@ -263,6 +264,7 @@ static void WNaf_Cursor_MoveNext(MultiMac_WNaf* p, const secp256k1_scalar* pK, u
 		p->m_iElement += nMaxElements;
 }
 
+__attribute__((noinline))
 void mem_cmov(unsigned int* pDst, const unsigned int* pSrc, int flag, unsigned int nWords)
 {
 	const unsigned int mask0 = flag + ~((unsigned int) 0);
@@ -370,6 +372,7 @@ __stack_hungry__
 static void MultiMac_Calculate_Secure_Read(secp256k1_ge* pGe, const MultiMac_Secure* pGen, unsigned int iElement)
 {
 	secp256k1_ge_storage ges;
+	ZERO_OBJ(ges); // suppress warning: potential unanitialized var used
 
 	for (unsigned int j = 0; j < c_MultiMac_Secure_nCount; j++)
 	{
@@ -477,7 +480,8 @@ void MultiMac_Calculate(MultiMac_Context* p)
 		if (!(iBit % c_MultiMac_nBits_Secure) && p->m_Secure.m_Count)
 			MultiMac_Calculate_SecureBit(p, iBit);
 
-		MultiMac_Calculate_FastBit(p, iBit);
+		if (p->m_Fast.m_Count) // suppress the warning, potential usage of uninitialized m_Fast.m_WndBits
+			MultiMac_Calculate_FastBit(p, iBit);
 	}
 
 	MultiMac_Calculate_PostPhase(p);
@@ -2799,43 +2803,63 @@ static void TxSend_DeriveKeys(KeyKeeper* p, const OpIn_TxSend2* pIn, TxSendConte
 		pCtx->m_hvToken.m_pVal[_countof(pCtx->m_hvToken.m_pVal) - 1] = 1;
 }
 
-uint16_t HandleTxSend(KeyKeeper* p, OpIn_TxSend2* pIn, OpOut_TxSend1* pOut1, OpOut_TxSend2* pOut2)
+uint16_t TxSend_Prepare(KeyKeeper* p, OpIn_TxSend2* pIn, TxSendContext* pCtx)
 {
-	TxSendContext ctx;
-	N2H_TxCommonIn(&ctx.m_txc, &pIn->m_Tx);
+	N2H_TxCommonIn(&pCtx->m_txc, &pIn->m_Tx);
 
-	uint16_t errCode = TxAggr_Get(p, &ctx.m_netAmount, &ctx.m_Aid, &ctx.m_txc.m_Krn.m_Fee);
+	uint16_t errCode = TxAggr_Get(p, &pCtx->m_netAmount, &pCtx->m_Aid, &pCtx->m_txc.m_Krn.m_Fee);
 	if (errCode)
 		return errCode;
 
-	if (!ctx.m_netAmount)
+	if (!pCtx->m_netAmount)
 		return MakeStatus(c_KeyKeeper_Status_Unspecified, 21); // not sending
 
 	if (IsUintBigZero(&pIn->m_Mut.m_Peer))
 		return MakeStatus(c_KeyKeeper_Status_UserAbort, 22); // conventional transfers must always be signed
 
-	N2H_uint(ctx.m_iSlot, pIn->m_iSlot, 32);
+	N2H_uint(pCtx->m_iSlot, pIn->m_iSlot, 32);
 
-	if (ctx.m_iSlot >= KeyKeeper_getNumSlots(p))
+	if (pCtx->m_iSlot >= KeyKeeper_getNumSlots(p))
 		return MakeStatus(c_KeyKeeper_Status_Unspecified, 23);
 
-	TxSend_DeriveKeys(p, pIn, &ctx);
+	TxSend_DeriveKeys(p, pIn, pCtx);
+	return c_KeyKeeper_Status_Ok;
+}
 
+PROTO_METHOD(TxSend1)
+{
+	PROTO_UNUSED_ARGS;
 
-	if (pOut1)
-	{
-		errCode = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &ctx.m_txc.m_Krn, 0, 0);
-		if (c_KeyKeeper_Status_Ok != errCode)
-			return errCode;
+	if (nIn)
+		return c_KeyKeeper_Status_ProtoError;
 
-		pOut1->m_UserAgreement = ctx.m_hvToken;
+	TxSendContext ctx;
+	uint16_t errCode = TxSend_Prepare(p, (OpIn_TxSend2*) pIn, &ctx);
+	if (errCode)
+		return errCode;
 
-		KernelUpdateKeysEx(&pOut1->m_Comms, &ctx.m_Keys, 0);
+	errCode = KeyKeeper_ConfirmSpend(p, ctx.m_netAmount, ctx.m_Aid, &pIn->m_Mut.m_Peer, &ctx.m_txc.m_Krn, 0, 0);
+	if (c_KeyKeeper_Status_Ok != errCode)
+		return errCode;
 
-		return c_KeyKeeper_Status_Ok;
-	}
+	pOut->m_UserAgreement = ctx.m_hvToken;
 
-	assert(pOut2);
+	KernelUpdateKeysEx(&pOut->m_Comms, &ctx.m_Keys, 0);
+
+	return c_KeyKeeper_Status_Ok;
+}
+
+PROTO_METHOD(TxSend2)
+{
+	PROTO_UNUSED_ARGS;
+
+	if (nIn)
+		return c_KeyKeeper_Status_ProtoError;
+
+	TxSendContext ctx;
+	uint16_t errCode = TxSend_Prepare(p, (OpIn_TxSend2*)pIn, &ctx);
+	if (errCode)
+		return errCode;
 
 	if (memcmp(pIn->m_UserAgreement.m_pVal, ctx.m_hvToken.m_pVal, sizeof(ctx.m_hvToken.m_pVal)))
 		return MakeStatus(c_KeyKeeper_Status_Unspecified, 24); // incorrect user agreement token
@@ -2856,31 +2880,11 @@ uint16_t HandleTxSend(KeyKeeper* p, OpIn_TxSend2* pIn, OpOut_TxSend1* pOut1, OpO
 	// Regenerate the slot (BEFORE signing), and sign
 	KeyKeeper_RegenerateSlot(p, ctx.m_iSlot);
 
-	Kernel_SignPartial(&pOut2->m_TxSig.m_kSig, &pIn->m_Comms, &ctx.m_hvToken, &ctx.m_Keys); // safe to use pOut2 and pIn
+	Kernel_SignPartial(&pOut->m_TxSig.m_kSig, &pIn->m_Comms, &ctx.m_hvToken, &ctx.m_Keys); // safe to use pOut and pIn
 
-	TxAggr_ToOffsetEx(p, &ctx.m_Keys.m_kKrn, &pOut2->m_TxSig.m_kOffset);
+	TxAggr_ToOffsetEx(p, &ctx.m_Keys.m_kKrn, &pOut->m_TxSig.m_kOffset);
 
 	return c_KeyKeeper_Status_Ok;
-}
-
-PROTO_METHOD(TxSend1)
-{
-	PROTO_UNUSED_ARGS;
-
-	if (nIn)
-		return c_KeyKeeper_Status_ProtoError;
-
-	return HandleTxSend(p, (OpIn_TxSend2*) pIn, pOut, 0);
-}
-
-PROTO_METHOD(TxSend2)
-{
-	PROTO_UNUSED_ARGS;
-
-	if (nIn)
-		return c_KeyKeeper_Status_ProtoError;
-
-	return HandleTxSend(p, pIn, 0, pOut);
 }
 
 //////////////////////////////
