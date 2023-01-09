@@ -743,6 +743,7 @@ int Point_Ge_from_CompactNnz(secp256k1_ge* pGe, const CompactPoint* pCompact)
 	if (!secp256k1_ge_set_xo_var(pGe, &pGe->x, pCompact->m_Y)) // according to code it seems ok to use ge.x as an argument
 		return 0;
 
+	pGe->infinity = 0;
 	return 1; // ok
 }
 
