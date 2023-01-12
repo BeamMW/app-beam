@@ -41,7 +41,7 @@ void BeamStackTest1();
 void BeamStackTest2();
 void BeamStackTest3();
 
-void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut);
+void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSizeOut);
 
 void ui_menu_main();
 void ui_menu_initial(); // can be different from main for testing

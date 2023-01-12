@@ -864,24 +864,24 @@ void OnSuffered()
 #endif // TARGET_NANOS
 
 
-void OnBeamHostRequest(uint8_t* pBuf, uint32_t nIn, uint32_t* pOut)
+void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSizeOut)
 {
 #ifdef TARGET_NANOS
     g_SufferFlag = 1;
     g_SufferPoints = 1500;
 #endif // TARGET_NANOS
 
-    uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pBuf, nIn, pBuf, pOut);
+    uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pIn, nIn, pOut, pSizeOut);
     if (c_KeyKeeper_Status_Ok == errCode)
-        pBuf[0] = c_KeyKeeper_Status_Ok;
+        pOut[0] = c_KeyKeeper_Status_Ok;
     else
     {
         // return distinguishable error message
-        pBuf[0] = (uint8_t) errCode;
-        pBuf[1] = (uint8_t) (errCode >> 8);
-        pBuf[2] = 'b';
-        pBuf[3] = 'F';
-        *pOut = 4;
+        pOut[0] = (uint8_t) errCode;
+        pOut[1] = (uint8_t) (errCode >> 8);
+        pOut[2] = 'b';
+        pOut[3] = 'F';
+        *pSizeOut = 4;
     }
 
 #ifdef TARGET_NANOS

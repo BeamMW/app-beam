@@ -61,17 +61,11 @@ void EndModal(uint8_t res)
     g_Modal = res;
 }
 
-uint32_t OnApduRcv(uint32_t lenInp)
+uint16_t OnApduRcv(int* pLen)
 {
-//    void Alert(const char* sz, uint32_t n);
-//    Alert("OnApduRcv", lenInp);
+    uint32_t lenInp = *pLen;
+    *pLen = 0;
 
-    uint32_t lenOutp = sizeof(G_io_apdu_buffer);
-    OnBeamHostRequest(G_io_apdu_buffer, lenInp, &lenOutp);
-
-    return lenOutp;
-
-/*
      // Structure with fields of APDU command.
 #pragma pack (push, 1)
     typedef struct {
@@ -84,60 +78,47 @@ uint32_t OnApduRcv(uint32_t lenInp)
     } command_t;
 #pragma pack (pop)
 
-    uint16_t retCode = SW_WRONG_DATA_LENGTH;
-    uint32_t lenOutp = 0;
-
-    memset(G_io_apdu_buffer, 0xaa, 175);
-
     if (lenInp < sizeof(command_t))
     {
         PRINTF("=> /!\\ too short\n");
-        OnBeamInvalidRequest();
+        return SW_WRONG_DATA_LENGTH;
     }
-    else
+
+    command_t* const pCmd = (command_t*) G_io_apdu_buffer;
+    lenInp -= sizeof(command_t);
+
+    if (lenInp != pCmd->lc)
     {
-
-        command_t* pCmd = (command_t*) G_io_apdu_buffer;
-        lenInp -= sizeof(command_t);
-        if (lenInp != pCmd->lc)
-        {
-            PRINTF("=> /!\\ Incorrect apdu LC: %.*H\n", lenInp, G_io_apdu_buffer);
-            OnBeamInvalidRequest();
-        }
-        else
-        {
-            PRINTF("=> CLA=%02X | INS=%02X | P1=%02X | P2=%02X | Lc=%02X | CData=%.*H\n",
-                pCmd->cla,
-                pCmd->ins,
-                pCmd->p1,
-                pCmd->p2,
-                pCmd->lc,
-                pCmd->lc,
-                pCmd->data);
-
-            if (pCmd->cla != 0xE0) // CLA
-                retCode = SW_CLA_NOT_SUPPORTED;
-            else
-            {
-                _Static_assert(sizeof(command_t) == 5, "");
-
-                // reorganize packet for processing. Currently we ignore p1,p2 and use ins + remaining body
-                G_io_apdu_buffer[0] = pCmd->ins;
-                memmove(G_io_apdu_buffer + 1, G_io_apdu_buffer + sizeof(command_t), lenInp);
-
-                lenOutp = sizeof(G_io_apdu_buffer);
-                retCode = OnBeamHostRequest(G_io_apdu_buffer, lenInp + 1, &lenOutp);
-
-                if (SW_OK != retCode)
-                    lenOutp = 0;
-            }
-        }
+        PRINTF("=> /!\\ Incorrect apdu LC: %.*H\n", lenInp, G_io_apdu_buffer);
+        return SW_WRONG_DATA_LENGTH;
     }
 
-    retCode = bswap16_be(retCode);
-    memcpy(G_io_apdu_buffer + lenOutp, &retCode, sizeof(retCode));
+    PRINTF("=> CLA=%02X | INS=%02X | P1=%02X | P2=%02X | Lc=%02X | CData=%.*H\n",
+        pCmd->cla,
+        pCmd->ins,
+        pCmd->p1,
+        pCmd->p2,
+        pCmd->lc,
+        pCmd->lc,
+        pCmd->data);
 
-    return lenOutp + sizeof(retCode);*/
+    if (pCmd->cla != 0xE0) // CLA
+        return SW_CLA_NOT_SUPPORTED;
+
+    if ('B' != pCmd->ins)
+        return SW_INS_NOT_SUPPORTED;
+
+    if (pCmd->p1 || pCmd->p2)
+        return SW_WRONG_P1P2;
+
+    uint32_t* pSizeOut = (uint32_t *) pLen;
+    _Static_assert(sizeof(*pLen) == sizeof(*pSizeOut), "");
+
+    *pSizeOut = sizeof(G_io_apdu_buffer) - sizeof(uint16_t);
+
+    OnBeamHostRequest(G_io_apdu_buffer + sizeof(*pCmd), lenInp, G_io_apdu_buffer, pSizeOut);
+
+    return SW_OK;
 }
 
 
@@ -210,7 +191,11 @@ void app_main()
                 PRINTF("=> Incoming command: %.*H\n", ioLen, G_io_apdu_buffer);
 
                 // Dispatch structured APDU command to handler
-                ioLen = OnApduRcv(ioLen);
+                uint16_t sw = OnApduRcv(&ioLen);
+                sw = bswap16_be(sw);
+
+                memcpy(G_io_apdu_buffer + ioLen, &sw, sizeof(sw));
+                ioLen += sizeof(sw);
             }
             CATCH(EXCEPTION_IO_RESET) {
                 THROW(EXCEPTION_IO_RESET);
