@@ -277,20 +277,12 @@ void ui_menu_about()
 
 /////////////////////////////////////
 // ui Account
-void PrintAccountNumber(char* sz, uint32_t iAccount)
+void PrintAccountNumberNnz(char* sz, uint32_t iAccount)
 {
-    if (iAccount)
-    {
-        static const char s_szPrefix[] = "Account ";
-        memcpy(sz, s_szPrefix, sizeof(s_szPrefix));
+    static const char s_szPrefix[] = "Account ";
+    memcpy(sz, s_szPrefix, sizeof(s_szPrefix));
 
-        PrintDecimalAuto(sz + sizeof(s_szPrefix) - 1, iAccount);
-    }
-    else
-    {
-        static const char s_szAccountDefault[] = "Default Account";
-        memcpy(sz, s_szAccountDefault, sizeof(s_szAccountDefault));
-    }
+    PrintDecimalAuto(sz + sizeof(s_szPrefix) - 1, iAccount);
 }
 
 void OnAccountMove(uint8_t n)
@@ -307,7 +299,13 @@ void OnAccountMove(uint8_t n)
         PRINTF("Account=%u\n", g_Ux_U.m_Account.m_Number);
     }
 
-    PrintAccountNumber(g_szLine2, g_Ux_U.m_Account.m_Number);
+    if (g_Ux_U.m_Account.m_Number)
+        PrintAccountNumberNnz(g_szLine2, g_Ux_U.m_Account.m_Number);
+    else
+    {
+        static const char s_szDefault[] = "Default";
+        memcpy(g_szLine2, s_szDefault, sizeof(s_szDefault));
+    }
 }
 
 UX_STEP_CB_INIT(ux_step_account_0, pnn, OnAccountMove(0), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
@@ -343,16 +341,26 @@ void ui_menu_account()
 // ui Main
 void OnMainAccount()
 {
+    if (N_Global.m_iAccount)
+        PrintAccountNumberNnz(g_szLine1, N_Global.m_iAccount);
+    else
+    {
+        static const char s_szAccountDefault[] = "Default Account";
+        memcpy(g_szLine1, s_szAccountDefault, sizeof(s_szAccountDefault));
+    }
+
+    // Derive account signature. Simplest would be using DeriveAddress(), it is however heavy for nano s.
+    // Hence we'll just hash the master kdf
+    const Kdf* pKdf = &KeyKeeper_Get()->m_MasterKey;
+
+    secp256k1_sha256_t sha;
+    secp256k1_sha256_initialize(&sha);
+    secp256k1_sha256_write(&sha, pKdf->m_Secret.m_pVal, sizeof(pKdf->m_Secret));
+
     UintBig hv;
-    secp256k1_scalar sk;
+    secp256k1_sha256_finalize(&sha, hv.m_pVal);
 
-    void DeriveAddress(const KeyKeeper* p, AddrID addrID, secp256k1_scalar * pKey, UintBig * pAddr);
-    DeriveAddress(KeyKeeper_Get(), 0, &sk, &hv);
-    SecureEraseMem(&sk, sizeof(sk));
-
-    PrintAccountNumber(g_szLine1, N_Global.m_iAccount);
-
-    PrintHex(g_szLine2, hv.m_pVal, 8);
+    PrintHex(g_szLine2, hv.m_pVal, 4);
 }
 
 UX_STEP_NOCB(ux_step_main_ready, pnn, { &C_beam_logo, "Beam", "is ready" }); 
