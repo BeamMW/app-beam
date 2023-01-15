@@ -265,11 +265,13 @@ bool InitMasterKey();
 void ui_menu_main_about();
 
 UX_STEP_NOCB(ux_step_about_info, bn, {"Beam App", "(c) 2020 Beam"});
+UX_STEP_NOCB(ux_step_about_version, bn, { "Version", APPVERSION });
 UX_STEP_CB(ux_step_about_back, pb, ui_menu_main_about(), {&C_icon_back, "Back"});
 
 UX_FLOW(
     ux_flow_about,
     &ux_step_about_info,
+    &ux_step_about_version,
     &ux_step_about_back,
     FLOW_LOOP
 );
@@ -312,9 +314,9 @@ void OnAccountMove(uint8_t n)
     }
 }
 
-UX_STEP_CB_INIT(ux_step_account_0, pnn, OnAccountMove(0), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
-UX_STEP_CB_INIT(ux_step_account_1, pnn, OnAccountMove(1), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
-UX_STEP_CB_INIT(ux_step_account_2, pnn, OnAccountMove(2), EndModal(c_Modal_Ok), { &C_beam_logo, "Choose account", g_szLine2 });
+UX_STEP_CB_INIT(ux_step_account_0, nn, OnAccountMove(0), EndModal(c_Modal_Ok), { "Choose account", g_szLine2 });
+UX_STEP_CB_INIT(ux_step_account_1, nn, OnAccountMove(1), EndModal(c_Modal_Ok), { "Choose account", g_szLine2 });
+UX_STEP_CB_INIT(ux_step_account_2, nn, OnAccountMove(2), EndModal(c_Modal_Ok), { "Choose account", g_szLine2 });
 
 UX_FLOW(ux_flow_account,
     &ux_step_account_0,
@@ -369,14 +371,12 @@ void OnMainAccount()
 
 UX_STEP_NOCB(ux_step_main_ready, pnn, { &C_beam_logo, "Beam", "is ready" }); 
 UX_STEP_CB_INIT(ux_step_main_account, nn, OnMainAccount(), ui_menu_account(), { g_szLine1, g_szLine2 });
-UX_STEP_NOCB(ux_step_main_version, bn, { "Version", APPVERSION });
 UX_STEP_CB(ux_step_main_about, pb, ui_menu_about(), { &C_icon_certificate, "About" });
 UX_STEP_VALID(ux_step_main_quit, pb, os_sched_exit(-1), { &C_icon_dashboard_x, "Quit" });
 
 UX_FLOW(ux_flow_main,
     &ux_step_main_ready,
     &ux_step_main_account,
-    &ux_step_main_version,
     &ux_step_main_about,
     &ux_step_main_quit,
     FLOW_LOOP);
