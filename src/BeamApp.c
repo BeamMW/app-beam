@@ -266,12 +266,14 @@ void ui_menu_main_about();
 
 UX_STEP_NOCB(ux_step_about_info, bn, {"Beam App", "(c) 2020 Beam"});
 UX_STEP_NOCB(ux_step_about_version, bn, { "Version", APPVERSION });
+UX_STEP_NOCB(ux_step_about_commit, bn, { "Git Hash", GIT_HASH });
 UX_STEP_CB(ux_step_about_back, pb, ui_menu_main_about(), {&C_icon_back, "Back"});
 
 UX_FLOW(
     ux_flow_about,
     &ux_step_about_info,
     &ux_step_about_version,
+    &ux_step_about_commit,
     &ux_step_about_back,
     FLOW_LOOP
 );
