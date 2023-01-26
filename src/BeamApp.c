@@ -177,7 +177,7 @@ union
 {
     struct {
         AddrID m_addrID;
-        const UintBig* m_pAddr;
+        const char* m_szEndpoint;
     } m_Addr;
 
     struct {
@@ -185,7 +185,7 @@ union
         Amount m_Amount;
         Amount m_Fee;
         AssetID m_Aid;
-        const UintBig* m_pAddr;
+        const char* m_szEndpoint;
         //const TxKernelUser* m_pUser;
         uint32_t m_Flags;
         //const UintBig* m_pKrnID;
@@ -205,6 +205,20 @@ void PrintAddr_2Line(const UintBig* pAddr, uint32_t iStep)
     PrintUintBig_4(g_szLine2, pAddr, iStep + 1);
 }
 
+#define c_Endpoint_Line_Len (c_KeyKeeper_Endpoint_Len / 4)
+
+void PrintEndpoint_2Line(const char* szEndpoint, uint32_t iStep)
+{
+    szEndpoint += c_Endpoint_Line_Len * iStep;
+
+    memcpy(g_szLine1, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine1[c_Endpoint_Line_Len] = 0;
+
+    szEndpoint += c_Endpoint_Line_Len;
+    memcpy(g_szLine2, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine2[c_Endpoint_Line_Len] = 0;
+}
+
 #ifndef TARGET_NANOS
 #   define HAVE_4LINES
 #endif
@@ -218,6 +232,24 @@ void PrintAddr_4Line(const UintBig* pAddr)
     PrintAddr_2Line(pAddr, 0);
     PrintUintBig_4(g_szLine3, pAddr, 2);
     PrintUintBig_4(g_szLine4, pAddr, 3);
+}
+
+void PrintEndpoint_4Line(const char* szEndpoint)
+{
+    memcpy(g_szLine1, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine1[c_Endpoint_Line_Len] = 0;
+
+    szEndpoint += c_Endpoint_Line_Len;
+    memcpy(g_szLine2, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine2[c_Endpoint_Line_Len] = 0;
+
+    szEndpoint += c_Endpoint_Line_Len;
+    memcpy(g_szLine3, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine3[c_Endpoint_Line_Len] = 0;
+
+    szEndpoint += c_Endpoint_Line_Len;
+    memcpy(g_szLine4, szEndpoint, c_Endpoint_Line_Len);
+    g_szLine4[c_Endpoint_Line_Len] = 0;
 }
 
 #endif
@@ -400,12 +432,12 @@ void ui_menu_main_about()
 
 //////////////////////
 // Display address
-UX_STEP_CB(ux_step_address_review, bb, EndModal(c_Modal_Ok), { "Please review", "Your address" });
+UX_STEP_CB(ux_step_address_review, bb, EndModal(c_Modal_Ok), { "Please review", "Your Endpoint" });
 #ifdef HAVE_4LINES
-UX_STEP_CB_INIT(ux_step_address_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Addr.m_pAddr), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+UX_STEP_CB_INIT(ux_step_address_x, nnnn, PrintEndpoint_4Line(g_Ux_U.m_Addr.m_szEndpoint), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
 #else // HAVE_4LINES
-UX_STEP_CB_INIT(ux_step_address_1, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 0), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
-UX_STEP_CB_INIT(ux_step_address_2, nn, PrintAddr_2Line(g_Ux_U.m_Addr.m_pAddr, 2), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
+UX_STEP_CB_INIT(ux_step_address_1, nn, PrintEndpoint_2Line(g_Ux_U.m_Addr.m_szEndpoint, 0), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
+UX_STEP_CB_INIT(ux_step_address_2, nn, PrintEndpoint_2Line(g_Ux_U.m_Addr.m_szEndpoint, 2), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
 #endif // HAVE_4LINES
 
 UX_FLOW(ux_flow_address,
@@ -423,8 +455,11 @@ void KeyKeeper_DisplayEndpoint(KeyKeeper* p, AddrID addrID, const UintBig* pAddr
 {
     UNUSED(p);
 
+    char szBuf[c_KeyKeeper_Endpoint_Len];
+    PrintEndpoint(szBuf, pAddr);
+
     g_Ux_U.m_Addr.m_addrID = addrID;
-    g_Ux_U.m_Addr.m_pAddr = pAddr;
+    g_Ux_U.m_Addr.m_szEndpoint = szBuf;
 
     ux_flow_init(0, ux_flow_address, NULL);
     DoModal();
@@ -444,12 +479,12 @@ UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend
 UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), { "Fee", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_type, bn, PrintTxType(g_szLine1), { "Type", g_szLine1 });
 #endif // HAVE_4LINES
-UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver address" });
+UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver Endpoint" });
 #ifdef HAVE_4LINES
-UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pAddr), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+UX_STEP_NOCB_INIT(ux_step_send_receiver_x, nnnn, PrintEndpoint_4Line(g_Ux_U.m_Spend.m_szEndpoint), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
 #else // HAVE_4LINES
-UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 0), { g_szLine1, g_szLine2 });
-UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pAddr, 2), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintEndpoint_2Line(g_Ux_U.m_Spend.m_szEndpoint, 0), { g_szLine1, g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintEndpoint_2Line(g_Ux_U.m_Spend.m_szEndpoint, 2), { g_szLine1, g_szLine2 });
 #endif // HAVE_4LINES
 //UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
 //#ifdef HAVE_4LINES
@@ -517,11 +552,14 @@ uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const Uin
     if (c_KeyKeeper_ConfirmSpend_2ndPhase & nFlags)
         return c_KeyKeeper_Status_Ok; // Current decision: ask only on the 1st invocation. Final confirmation isn't needed.
 
+    char szBuf[c_KeyKeeper_Endpoint_Len];
+    if (pPeerID)
+        PrintEndpoint(szBuf, pPeerID);
 
     g_Ux_U.m_Spend.m_Amount = val;
     g_Ux_U.m_Spend.m_Fee = p->u.m_TxBalance.m_TotalFee;
     g_Ux_U.m_Spend.m_Aid = aid;
-    g_Ux_U.m_Spend.m_pAddr = pPeerID;
+    g_Ux_U.m_Spend.m_szEndpoint = szBuf;
     //g_Ux_U.m_Spend.m_pUser = pUser;
     g_Ux_U.m_Spend.m_Flags = nFlags;
     //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
