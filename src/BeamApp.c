@@ -419,7 +419,7 @@ UX_FLOW(ux_flow_address,
 );
 
 
-void KeyKeeper_DisplayAddress(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
+void KeyKeeper_DisplayEndpoint(KeyKeeper* p, AddrID addrID, const UintBig* pAddr)
 {
     UNUSED(p);
 

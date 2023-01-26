@@ -92,7 +92,7 @@ void OnSomeDemo()
 
     RangeProof_Calculate(&rp);
 
-    KeyKeeper_DisplayAddress(&kk, 15, &hv);
+    KeyKeeper_DisplayEndpoint(&kk, 15, &hv);
 
 }
 
