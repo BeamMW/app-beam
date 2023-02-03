@@ -263,7 +263,7 @@ void PrintTxType(char* sz)
     }
     else
     {
-        static const char s_szType[] = "Mimble-Wimble";
+        static const char s_szType[] = "Mimblewimble";
         memcpy(sz, s_szType, sizeof(s_szType));
     }
 }
@@ -432,22 +432,24 @@ void ui_menu_main_about()
 
 //////////////////////
 // Display address
-UX_STEP_CB(ux_step_address_review, bb, EndModal(c_Modal_Ok), { "Please review", "Your Endpoint" });
+UX_STEP_CB(ux_step_address_review, pbb, EndModal(c_Modal_Ok), { &C_icon_eye, "Please review", "Your Endpoint" });
 #ifdef HAVE_4LINES
 UX_STEP_CB_INIT(ux_step_address_x, nnnn, PrintEndpoint_4Line(g_Ux_U.m_Addr.m_szEndpoint), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
 #else // HAVE_4LINES
 UX_STEP_CB_INIT(ux_step_address_1, nn, PrintEndpoint_2Line(g_Ux_U.m_Addr.m_szEndpoint, 0), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
 UX_STEP_CB_INIT(ux_step_address_2, nn, PrintEndpoint_2Line(g_Ux_U.m_Addr.m_szEndpoint, 2), EndModal(c_Modal_Cancel), { g_szLine1, g_szLine2 });
 #endif // HAVE_4LINES
+UX_STEP_CB(ux_step_address_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Done" });
 
 UX_FLOW(ux_flow_address,
     &ux_step_address_review,
 #ifdef HAVE_4LINES
-    & ux_step_address_x
+    & ux_step_address_x,
 #else // HAVE_4LINES
     & ux_step_address_1,
-    & ux_step_address_2
+    & ux_step_address_2,
 #endif // HAVE_4LINES
+    & ux_step_address_Ok
 );
 
 
