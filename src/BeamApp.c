@@ -942,7 +942,7 @@ void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSiz
 
     if (2 & g_SufferFlag)
     {
-        PRINTF("** Suffer end\n", iIdx);
+        PRINTF("** Suffer end\n");
         ui_menu_main();
     }
 
