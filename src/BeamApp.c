@@ -377,6 +377,8 @@ void ui_menu_account()
     ui_menu_main_account();
 }
 
+uint8_t DoModalPlus();
+
 /////////////////////////////////////
 // ui Main
 void OnMainAccount()
@@ -464,8 +466,7 @@ void KeyKeeper_DisplayEndpoint(KeyKeeper* p, AddrID addrID, const UintBig* pAddr
     g_Ux_U.m_Addr.m_szEndpoint = szBuf;
 
     ux_flow_init(0, ux_flow_address, NULL);
-    DoModal();
-    ui_menu_main();
+    DoModalPlus();
 }
 
 
@@ -567,8 +568,7 @@ uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const Uin
     //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
 
     ux_flow_init(0, pPeerID ? ux_flow_send : ux_flow_split, NULL);
-    uint8_t res = DoModal();
-    ui_menu_main();
+    uint8_t res = DoModalPlus();
 
     return (c_Modal_Ok == res) ? c_KeyKeeper_Status_Ok : c_KeyKeeper_Status_UserAbort;
 }
@@ -882,48 +882,99 @@ void KeyKeeper_WriteAuxBuf(KeyKeeper* pKk, const void* p, uint32_t nOffset, uint
 
 
 //////////////////////
-// Suffer notification
+// Computing notification
+struct
+{
+    uint8_t m_iPhase;
+    uint8_t m_TicksRemaining;
+
+} g_Computing = { 0 };
+
+void OnStepComputingClosed()
+{
+    ui_menu_main();
+    g_Computing.m_TicksRemaining = 0;
+
 #ifdef TARGET_NANOS
+    extern uint16_t g_SufferPoints;
+    g_SufferPoints = 0;
+#endif // TARGET_NANOS
 
-extern uint16_t g_SufferPoints;
-uint8_t g_SufferFlag = 0;
+}
 
-UX_STEP_NOCB(ux_step_suffer, nn, { "Computing...", g_szLine1 });
+UX_STEP_CB(ux_step_computing, pnn, OnStepComputingClosed(), { &C_icon_processing, "Beam", g_szLine1 });
 
-UX_FLOW(ux_flow_suffer,
-    &ux_step_suffer);
+UX_FLOW(ux_flow_computing,
+    &ux_step_computing);
 
 void WaitDisplayed();
 
+const char g_szComputing[] = "Computing... ";
+const char g_szComputingPhase[] = { '-', '\\', '|', '/' };
+
+void DisplayComputing()
+{
+
+    static_assert(sizeof(g_szLine1) > sizeof(g_szComputing), "");
+    g_szLine1[sizeof(g_szComputing) - 1] = g_szComputingPhase[g_Computing.m_iPhase];
+
+    ux_flow_init(0, ux_flow_computing, NULL);
+    WaitDisplayed();
+}
+
+void DisplayComputing0()
+{
+    memcpy(g_szLine1, g_szComputing, sizeof(g_szComputing));
+    g_szLine1[sizeof(g_szComputing)] = 0; // 1 more 0-term
+    g_Computing.m_iPhase = 1;
+
+    DisplayComputing();
+}
+
+void SetNextComputingStatus()
+{
+    g_Computing.m_iPhase = (g_Computing.m_iPhase + 1) % sizeof(g_szComputingPhase);
+    DisplayComputing();
+}
+
+#ifdef TARGET_NANOS
+
 void OnSuffered()
 {
-    if (g_SufferFlag)
-    {
-        g_SufferFlag |= 2;
-
-        uint8_t iIdx = g_SufferFlag >> 2;
-        PRINTF("** Suffer idx=%u\n", iIdx);
-
-        memset(g_szLine1, '.', iIdx);
-        g_szLine1[iIdx] = 0;
-
-        ux_flow_init(0, ux_flow_suffer, NULL);
-        WaitDisplayed();
-
-        iIdx = (iIdx + 1) % 20;
-        g_SufferFlag = (3 & g_SufferFlag) | (iIdx << 2);
-    }
+    if (g_Computing.m_TicksRemaining)
+        SetNextComputingStatus();
 }
 
 #endif // TARGET_NANOS
 
+void OnUiTick()
+{
+    if (g_Computing.m_TicksRemaining)
+    {
+        if (!--g_Computing.m_TicksRemaining)
+            OnStepComputingClosed();
+        else
+        {
+            if (!(g_Computing.m_TicksRemaining % 5))
+                SetNextComputingStatus();
+        }
+    }
+}
 
 void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSizeOut)
 {
+    if (!g_Computing.m_TicksRemaining)
+    {
 #ifdef TARGET_NANOS
-    g_SufferFlag = 1;
-    g_SufferPoints = 1500;
+        extern uint16_t g_SufferPoints;
+        g_SufferPoints = 1;
 #endif // TARGET_NANOS
+
+        g_Computing.m_iPhase = 0;
+        DisplayComputing0();
+    }
+
+    g_Computing.m_TicksRemaining = 10; // 1 second
 
     uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pIn, nIn, pOut, pSizeOut);
     if (c_KeyKeeper_Status_Ok == errCode)
@@ -937,18 +988,6 @@ void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSiz
         pOut[3] = 'F';
         *pSizeOut = 4;
     }
-
-#ifdef TARGET_NANOS
-
-    if (2 & g_SufferFlag)
-    {
-        PRINTF("** Suffer end\n");
-        ui_menu_main();
-    }
-
-    g_SufferFlag = 0;
-
-#endif // TARGET_NANOS
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
@@ -963,6 +1002,24 @@ void Alert(const char* sz, uint32_t n)
     PrintDecimalAuto(g_szLine2, n);
 
     ux_flow_init(0, ux_flow_alert, NULL);
-    DoModal();
-    ui_menu_main();
+    DoModalPlus();
+}
+
+uint8_t DoModalPlus()
+{
+    uint8_t nTicks = g_Computing.m_TicksRemaining;
+    g_Computing.m_TicksRemaining = 0;
+
+    uint8_t ret = DoModal();
+
+    if (nTicks)
+    {
+        g_Computing.m_TicksRemaining = nTicks;
+        DisplayComputing0();
+    }
+    else
+        ui_menu_main();
+
+    return ret;
+
 }
