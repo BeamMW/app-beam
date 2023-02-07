@@ -914,7 +914,6 @@ const char g_szComputingPhase[] = { '-', '\\', '|', '/' };
 
 void DisplayComputing()
 {
-
     static_assert(sizeof(g_szLine1) > sizeof(g_szComputing), "");
     g_szLine1[sizeof(g_szComputing) - 1] = g_szComputingPhase[g_Computing.m_iPhase];
 
@@ -926,7 +925,6 @@ void DisplayComputing0()
 {
     memcpy(g_szLine1, g_szComputing, sizeof(g_szComputing));
     g_szLine1[sizeof(g_szComputing)] = 0; // 1 more 0-term
-    g_Computing.m_iPhase = 1;
 
     DisplayComputing();
 }
@@ -970,11 +968,10 @@ void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSiz
         g_SufferPoints = 1;
 #endif // TARGET_NANOS
 
-        g_Computing.m_iPhase = 0;
         DisplayComputing0();
     }
 
-    g_Computing.m_TicksRemaining = 10; // 1 second
+    g_Computing.m_TicksRemaining = 20; // 2 seconds
 
     uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pIn, nIn, pOut, pSizeOut);
     if (c_KeyKeeper_Status_Ok == errCode)
@@ -988,6 +985,9 @@ void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSiz
         pOut[3] = 'F';
         *pSizeOut = 4;
     }
+
+    if (1 == g_Computing.m_TicksRemaining)
+        OnStepComputingClosed();
 }
 
 UX_STEP_CB(ux_step_alert, bb, EndModal(c_Modal_Ok), { g_szLine1, g_szLine2 });
@@ -1014,7 +1014,7 @@ uint8_t DoModalPlus()
 
     if (nTicks)
     {
-        g_Computing.m_TicksRemaining = nTicks;
+        g_Computing.m_TicksRemaining = 1; // close right after ADPU handling
         DisplayComputing0();
     }
     else
