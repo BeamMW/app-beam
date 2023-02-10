@@ -147,8 +147,31 @@ typedef struct
 
 typedef struct
 {
+	UintBig m_Gen_Secret;
+	CompactPoint m_Gen_PkG;
+	CompactPoint m_Gen_PkJ;
+	UintBig m_Ser_Secret;
+	CompactPoint m_Ser_PkG;
+
+} OfflineAddr;
+
+
+typedef struct
+{
 	RangeProof_Packed m_RangeProof;
-	ShieldedVoucher m_Voucher;
+
+	union
+	{
+		ShieldedVoucher m_Voucher;
+
+		struct
+		{
+			OfflineAddr m_Addr;
+			Signature m_Sig;
+			UintBig m_Nonce;
+		} m_Offline;
+	} u;
+
 } ShieldedOutParams;
 
 typedef struct
@@ -211,7 +234,7 @@ void KeyKeeper_GetPKdf(const KeyKeeper*, KdfPub*, const uint32_t* pChild); // if
 //////////////////
 // Protocol
 #define BeamCrypto_Signature "BeamHW"
-#define BeamCrypto_CurrentVersion 3
+#define BeamCrypto_CurrentVersion 4
 
 #define BeamCrypto_ProtoRequest_Version(macro)
 #define BeamCrypto_ProtoResponse_Version(macro) \
@@ -303,6 +326,12 @@ void KeyKeeper_GetPKdf(const KeyKeeper*, KdfPub*, const uint32_t* pChild); // if
 	macro(uint32_t, Count) \
 	/* followed by ShieldedVoucher[] */
 
+#define BeamCrypto_ProtoRequest_SignOfflineAddr(macro) \
+	macro(AddrID, AddrID)
+
+#define BeamCrypto_ProtoResponse_SignOfflineAddr(macro) \
+	macro(Signature, Signature)
+
 #define BeamCrypto_ProtoRequest_TxSplit(macro) \
 	macro(TxCommonIn, Tx) \
 
@@ -343,11 +372,19 @@ void KeyKeeper_GetPKdf(const KeyKeeper*, KdfPub*, const uint32_t* pChild); // if
 
 #define BeamCrypto_ProtoResponse_AuxWrite(macro)
 
+#define BeamCrypto_ProtoRequest_AuxRead(macro) \
+	macro(uint16_t, Offset) \
+	macro(uint16_t, Size)
+
+#define BeamCrypto_ProtoResponse_AuxRead(macro) \
+	/* followed by blob */
+
 #define BeamCrypto_ProtoRequest_TxSendShielded(macro) \
 	macro(TxCommonIn, Tx) \
 	macro(TxMutualIn, Mut) \
 	macro(ShieldedTxoUser, User) \
 	macro(CompactPoint, ptAssetGen) \
+	macro(uint8_t, UsePublicGen) \
 	macro(uint8_t, HideAssetAlways) /* important to specify, this affects expected blinding factor recovery */ \
 
 #define BeamCrypto_ProtoResponse_TxSendShielded(macro) \
@@ -366,7 +403,9 @@ void KeyKeeper_GetPKdf(const KeyKeeper*, KdfPub*, const uint32_t* pChild); // if
 	macro(0x1c, CreateShieldedInput_3) \
 	macro(0x1d, CreateShieldedInput_4) \
 	macro(0x22, CreateShieldedVouchers) \
+	macro(0x23, SignOfflineAddr) \
 	macro(0x28, AuxWrite) \
+	macro(0x29, AuxRead) \
 	macro(0x30, TxSplit) \
 	macro(0x31, TxReceive) \
 	macro(0x32, TxSend1) \
