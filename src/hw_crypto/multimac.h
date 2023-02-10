@@ -15,15 +15,11 @@
 #pragma once
 #include "ecc_decl.h"
 
-#ifdef BeamCrypto_SlowLoad
-#	define c_MultiMac_nBits_Rangeproof 2
-#else // BeamCrypto_SlowLoad
-#	ifdef BeamCrypto_ScarceStack
-#		define c_MultiMac_nBits_Rangeproof 3
-#	else // BeamCrypto_ScarceStack
-#		define c_MultiMac_nBits_Rangeproof 4
-#	endif // BeamCrypto_ScarceStack
-#endif // BeamCrypto_SlowLoad
+#ifdef BeamCrypto_ScarceStack
+#	define c_MultiMac_nBits_Rangeproof 3
+#else // BeamCrypto_ScarceStack
+#	define c_MultiMac_nBits_Rangeproof 4
+#endif // BeamCrypto_ScarceStack
 
 #define c_MultiMac_nBits_H 4
 #define c_MultiMac_nBits_Secure 4

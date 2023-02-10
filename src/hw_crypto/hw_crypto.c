@@ -1339,14 +1339,7 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 	mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_Rangeproof;
 	mmCtx.m_Fast.m_pK = pS;
 	mmCtx.m_Fast.m_pWnaf = pWnaf;
-
-#ifdef BeamCrypto_SlowLoad
-	secp256k1_ge_storage pGen[Calc_S_Naggle][c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof)];
-	memcpy(pGen, Context_get()->m_pGenRangeproof, sizeof(pGen));
-	mmCtx.m_Fast.m_pGen0 = pGen[0];
-#else // BeamCrypto_SlowLoad
 	mmCtx.m_Fast.m_pGen0 = Context_get()->m_pGenRangeproof[0];
-#endif // BeamCrypto_SlowLoad
 
 	for (unsigned int iBit = 0; iBit < nDims * 2; iBit++, mmCtx.m_Fast.m_Count++)
 	{
@@ -1361,14 +1354,7 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 
 			mmCtx.m_Secure.m_Count = 0;
 			mmCtx.m_Fast.m_Count = 0;
-
-#ifdef BeamCrypto_SlowLoad
-			uint32_t nRemaining = min(Calc_S_Naggle, (nDims * 2 - iBit));
-			memcpy(pGen, Context_get()->m_pGenRangeproof + iBit, sizeof(pGen[0]) * nRemaining);
-#else // BeamCrypto_SlowLoad
 			mmCtx.m_Fast.m_pGen0 += Calc_S_Naggle * c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof);
-#endif // BeamCrypto_SlowLoad
-
 		}
 
 		NonceGenerator_NextScalar(&pWrk->m_NonceGen, pS + mmCtx.m_Fast.m_Count);
@@ -2016,8 +2002,6 @@ void TxKernel_SpecialMsg(secp256k1_sha256_t* pSha, Amount fee, Height hMin, Heig
 __stack_hungry__
 static void Kdf2Pub(const Kdf* pKdf, KdfPub* pRes)
 {
-	Context* pCtx = Context_get();
-
 	pRes->m_Secret = pKdf->m_Secret;
 
 	secp256k1_gej pGej[2];
@@ -3281,15 +3265,17 @@ PROTO_METHOD(CreateShieldedVouchers)
 	AddrID addrID;
 	N2H_uint(addrID, pIn->m_AddrID, 64);
 
-	uint32_t nCount;
-	N2H_uint(nCount, pIn->m_Count, 32);
+	uint8_t nCount = pIn->m_Count;
 	if (!nCount)
 		return c_KeyKeeper_Status_Ok;
 
-	uint32_t nSizeOut = sizeof(ShieldedVoucher) * nCount;
-	if (nOut < nSizeOut)
+	if (nOut < sizeof(ShieldedVoucher))
 		return MakeStatus(c_KeyKeeper_Status_ProtoError, 1);
-	*pOutSize += nSizeOut;
+	*pOutSize += sizeof(ShieldedVoucher);
+
+	const uint8_t nMaxCountAux = sizeof(KeyKeeper_AuxBuf) / sizeof(ShieldedVoucher);
+	if (nCount - 1 > nMaxCountAux)
+		return MakeStatus(c_KeyKeeper_Status_ProtoError, 2);
 
 	ShieldedViewer viewer;
 	ShieldedViewerInit(&viewer, 0, p);
@@ -3305,7 +3291,7 @@ PROTO_METHOD(CreateShieldedVouchers)
 	ShieldedVoucher* pRes = (ShieldedVoucher*)(pOut + 1); // no fields require alignment
 	memcpy(&hvNonce, &pIn->m_Nonce0, sizeof(hvNonce));
 
-	for (uint32_t i = 0; ; pRes++)
+	for (uint32_t i = 0; ; )
 	{
 		CreateVoucherInternal(&vCtx, pRes, &hvNonce);
 
@@ -3315,6 +3301,9 @@ PROTO_METHOD(CreateShieldedVouchers)
 		if (++i == nCount)
 			break;
 
+		// append the result to aux buf
+		KeyKeeper_WriteAuxBuf(p, pRes, sizeof(*pRes) * (i - 1), sizeof(*pRes));
+
 		// regenerate nonce
 		Oracle oracle;
 		secp256k1_sha256_initialize(&oracle.m_sha);
@@ -3322,8 +3311,6 @@ PROTO_METHOD(CreateShieldedVouchers)
 		secp256k1_sha256_write_UintBig(&oracle.m_sha, &hvNonce);
 		secp256k1_sha256_finalize(&oracle.m_sha, hvNonce.m_pVal);
 	}
-
-	H2N_uint(pOut->m_Count, nCount, 32);
 
 	return c_KeyKeeper_Status_Ok;
 }
@@ -3715,7 +3702,7 @@ PROTO_METHOD(AuxRead)
 
 	const uint8_t* pSrc = (const uint8_t*) KeyKeeper_GetAuxBuf(p);
 
-	memcpy(pOut, pSrc, nSize);
+	memcpy(pOut + 1, pSrc + nOffset, nSize);
 	*pOutSize += nSize;
 
 	return c_KeyKeeper_Status_Ok;
