@@ -182,13 +182,8 @@ union
 
     struct {
 
-        Amount m_Amount;
-        Amount m_Fee;
-        AssetID m_Aid;
+        const TxSummary* m_pSummary;
         const char* m_szEndpoint;
-        //const TxKernelUser* m_pUser;
-        uint32_t m_Flags;
-        //const UintBig* m_pKrnID;
 
     } m_Spend;
 
@@ -256,15 +251,27 @@ void PrintEndpoint_4Line(const char* szEndpoint)
 
 void PrintTxType(char* sz)
 {
-    if (c_KeyKeeper_ConfirmSpend_Shielded & g_Ux_U.m_Spend.m_Flags)
+    switch ((c_KeyKeeper_ConfirmSpend_Shielded | c_KeyKeeper_ConfirmSpend_Offline) & g_Ux_U.m_Spend.m_pSummary->m_Flags)
     {
-        static const char s_szType[] = "Lelantus-MW";
-        memcpy(sz, s_szType, sizeof(s_szType));
-    }
-    else
-    {
-        static const char s_szType[] = "Mimblewimble";
-        memcpy(sz, s_szType, sizeof(s_szType));
+    case c_KeyKeeper_ConfirmSpend_Shielded:
+        {
+            static const char s_szType[] = "Lelantus-MW";
+            memcpy(sz, s_szType, sizeof(s_szType));
+        }
+        break;
+
+    case c_KeyKeeper_ConfirmSpend_Shielded | c_KeyKeeper_ConfirmSpend_Offline:
+        {
+            static const char s_szType[] = "Offline";
+            memcpy(sz, s_szType, sizeof(s_szType));
+        }
+        break;
+
+    default:
+        {
+            static const char s_szType[] = "Mimblewimble";
+            memcpy(sz, s_szType, sizeof(s_szType));
+        }
     }
 }
 
@@ -474,12 +481,12 @@ void KeyKeeper_DisplayEndpoint(KeyKeeper* p, AddrID addrID, const UintBig* pAddr
 // Confirm Spend
 UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "send transaction" });
 #ifdef HAVE_4LINES
-UX_STEP_NOCB_INIT(ux_step_send_amount_asset, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), PrintAssetID(g_szLine2, g_Ux_U.m_Spend.m_Aid)), { "Amount", g_szLine1, "Asset", g_szLine2 });
-UX_STEP_NOCB_INIT(ux_step_send_fee_type, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), PrintTxType(g_szLine2)), { "Fee", g_szLine1, "Type", g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_amount_asset, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_NetAmount), PrintAssetID(g_szLine2, g_Ux_U.m_Spend.m_pSummary->m_Aid)), { "Amount", g_szLine1, "Asset", g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_fee_type, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Krn.m_Fee), PrintTxType(g_szLine2)), { "Fee", g_szLine1, "Type", g_szLine2 });
 #else // HAVE_4LINES
-UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Amount), { "Amount", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_Aid), { "Asset", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_Fee), { "Fee", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_NetAmount), { "Amount", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Aid), { "Asset", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Krn.m_Fee), { "Fee", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_type, bn, PrintTxType(g_szLine1), { "Type", g_szLine1 });
 #endif // HAVE_4LINES
 UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver Endpoint" });
@@ -491,10 +498,10 @@ UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintEndpoint_2Line(g_Ux_U.m_Spen
 #endif // HAVE_4LINES
 //UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
 //#ifdef HAVE_4LINES
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
 //#else // HAVE_4LINES
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 0), { g_szLine1, g_szLine2 });
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pKrnID, 2), { g_szLine1, g_szLine2 });
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID, 0), { g_szLine1, g_szLine2 });
+//UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID, 2), { g_szLine1, g_szLine2 });
 //#endif // HAVE_4LINES
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
@@ -547,27 +554,27 @@ UX_FLOW(ux_flow_split,
     &ux_step_send_Ok,
     & ux_step_send_Cancel);
 
-uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, Amount val, AssetID aid, const UintBig* pPeerID, const TxKernelUser* pUser, const UintBig* pKrnID, uint32_t nFlags)
+uint16_t KeyKeeper_ConfirmSpend(KeyKeeper* p, const TxSummary* pSummary)
 {
-    UNUSED(pKrnID);
-    UNUSED(pUser);
+    UNUSED(p);
 
-    if (c_KeyKeeper_ConfirmSpend_2ndPhase & nFlags)
+    if (c_KeyKeeper_ConfirmSpend_2ndPhase & pSummary->m_Flags)
         return c_KeyKeeper_Status_Ok; // Current decision: ask only on the 1st invocation. Final confirmation isn't needed.
 
+    g_Ux_U.m_Spend.m_pSummary = pSummary;
+
     char szBuf[c_KeyKeeper_Endpoint_Len];
-    if (pPeerID)
-        PrintEndpoint(szBuf, pPeerID);
 
-    g_Ux_U.m_Spend.m_Amount = val;
-    g_Ux_U.m_Spend.m_Fee = p->u.m_TxBalance.m_TotalFee;
-    g_Ux_U.m_Spend.m_Aid = aid;
-    g_Ux_U.m_Spend.m_szEndpoint = szBuf;
-    //g_Ux_U.m_Spend.m_pUser = pUser;
-    g_Ux_U.m_Spend.m_Flags = nFlags;
-    //g_Ux_U.m_Spend.m_pKrnID = pKrnID;
+    if (c_KeyKeeper_ConfirmSpend_Split & pSummary->m_Flags)
+        ux_flow_init(0, ux_flow_split, NULL);
+    else
+    {
+        PrintEndpoint(szBuf, pSummary->m_pPeer);
+        g_Ux_U.m_Spend.m_szEndpoint = szBuf;
 
-    ux_flow_init(0, pPeerID ? ux_flow_send : ux_flow_split, NULL);
+        ux_flow_init(0, ux_flow_send, NULL);
+    }
+
     uint8_t res = DoModalPlus();
 
     return (c_Modal_Ok == res) ? c_KeyKeeper_Status_Ok : c_KeyKeeper_Status_UserAbort;
