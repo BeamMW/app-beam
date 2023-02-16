@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <assert.h>
+#include "os.h"
 #include "multimac.h"
 #include "oracle.h"
 #include "noncegen.h"

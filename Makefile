@@ -65,7 +65,6 @@ endif
 ifeq ($(TARGET_NAME),TARGET_NANOS)
     DEFINES += IO_SEPROXYHAL_BUFFER_SIZE_B=128
     DEFINES += BeamCrypto_ScarceStack
-    DEFINES += TARGET_NANOS
     CFLAGS  += -foptimize-sibling-calls
     # CFLAGS  += -fconserve_stack -finline-max-stacksize=100
 else

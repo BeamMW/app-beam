@@ -21,6 +21,11 @@ uint8_t G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 ux_state_t G_ux;
 bolos_ux_params_t G_ux_params;
 
+
+#if ((defined TARGET_NANOX) + (defined TARGET_NANOS) + (defined TARGET_NANOSP) != 1)
+#   error inconsistent target defs
+#endif
+
 void WaitDisplayed()
 {
     UX_WAKE_UP()
@@ -141,6 +146,9 @@ void StackMark()
 __attribute__((noinline))
 void StackPrint(const void* p, const char* sz)
 {
+    UNUSED(p);
+    UNUSED(sz);
+
 #ifdef STACK_CANARY
     uint32_t* pMark = (uint32_t*) &_stack;
     for (; ; pMark++)
@@ -148,9 +156,6 @@ void StackPrint(const void* p, const char* sz)
             break;
 
     PRINTF("@@ Op=%s, Stack consumed: %u\n", sz, (((uint32_t*) p) - pMark) * sizeof(uint32_t));
-#else // STACK_CANARY
-    UNUSED(p);
-    UNUSED(sz);
 #endif // STACK_CANARY
 }
 

@@ -308,6 +308,7 @@ void BeamStackTest2()
 
     s.u.p1.m_In.m_OpCode = g_Proto_Code_GetNumSlots;
     int n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2.m_In), sizeof(Proto_Out_TxAddCoins));
+    UNUSED(n);
 
     StackPrint(&s, "GetNumSlots");
 
@@ -329,6 +330,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    UNUSED(n);
+
     StackPrint(&s, "kk1 TxAddCoins");
 
     memset(&s.u.p2, 0, sizeof(s.u.p2));
@@ -348,6 +351,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk2, (uint8_t*) &s.u.p2, sizeof(s.u.p2), sizeof(Proto_Out_TxAddCoins));
+    UNUSED(n);
+
     StackPrint(&s, "kk2 TxAddCoins");
 
     PRINTF("ret=%d\n", n);
@@ -366,6 +371,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p3, sizeof(s.u.p3.m_In), sizeof(s.u.p3.m_Out));
+    UNUSED(n);
+
     StackPrint(&s, "TxSend1");
     PRINTF("ret=%d\n", n);
     Alert("TxSend1", n);
@@ -384,6 +391,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk2, (uint8_t*) &s.u.p4, sizeof(s.u.p4.m_In), sizeof(s.u.p4.m_Out));
+    UNUSED(n);
+
     StackPrint(&s, "TxReceive");
     PRINTF("ret=%d\n", n);
     Alert("TxReceive", n);
@@ -404,6 +413,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*) &s.u.p5, sizeof(s.u.p5.m_In), sizeof(s.u.p5.m_Out));
+    UNUSED(n);
+
     StackPrint(&s, "TxSend2");
     PRINTF("ret=%d\n", n);
     Alert("TxSend2", n);
@@ -419,6 +430,8 @@ void BeamStackTest2()
 
     StackMark();
     n = KeyKeeper_InvokeExact(&s.kk1, (uint8_t*)&s.u.p6, sizeof(s.u.p6.m_In), sizeof(s.u.p6.m_Out));
+    UNUSED(n);
+
     StackPrint(&s, "CreateOutput");
     PRINTF("ret=%d\n", n);
     Alert("CreateOutput", n);
@@ -466,6 +479,7 @@ void BeamStackTest3()
     s.u.reqVouchers.m_OpCode = g_Proto_Code_CreateShieldedVouchers;
     s.u.reqVouchers.m_Count = 1;
     int n = KeyKeeper_InvokeExact(&s.kk, (uint8_t*) &s.u.reqVouchers, sizeof(s.u.reqVouchers), sizeof(s.u.resVouchers));
+    UNUSED(n);
 
     StackPrint(&s, "CreateVouchers");
 
@@ -484,6 +498,7 @@ void BeamStackTest3()
     StackMark();
 
     n = KeyKeeper_InvokeExact(&s.kk, (uint8_t*)&s.u.reqShieldedCoin, sizeof(s.u.reqShieldedCoin), sizeof(s.u.m_Out_ShieldedCoin));
+    UNUSED(n);
 
     StackPrint(&s, "AddShieldedInput");
 
@@ -537,6 +552,7 @@ void BeamStackTest4()
         StackMark();
 
         int n = KeyKeeper_InvokeExact(pKk, (uint8_t*) pIn, sizeof(*pIn), sizeof(*pOut));
+        UNUSED(n);
 
         StackPrint(&hv, "CreateShieldedInput_1");
 
@@ -553,6 +569,7 @@ void BeamStackTest4()
         StackMark();
 
         int n = KeyKeeper_InvokeExact(pKk, (uint8_t*) pIn, sizeof(*pIn), sizeof(*pOut));
+        UNUSED(n);
 
         StackPrint(&hv, "CreateShieldedInput_2");
 
@@ -569,6 +586,7 @@ void BeamStackTest4()
         StackMark();
 
         int n = KeyKeeper_InvokeExact(pKk, (uint8_t*) pIn, sizeof(*pIn) + sizeof(CompactPoint) * 8, sizeof(*pOut));
+        UNUSED(n);
 
         StackPrint(&hv, "CreateShieldedInput_3");
 
@@ -621,6 +639,7 @@ void BeamStackTest5()
 
     uint32_t nOut = sizeof(G_io_apdu_buffer);
     int n = KeyKeeper_Invoke(pKk, pMsg0, sizeof(pMsg0), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_0");
     PRINTF("SendShielded_0, ret=%d, size=%d\n", n, nOut);
@@ -630,6 +649,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg1, sizeof(pMsg1), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_1");
     PRINTF("SendShielded_1, ret=%d, size=%d\n", n, nOut);
@@ -639,6 +659,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg2, sizeof(pMsg2), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_2");
     PRINTF("SendShielded_2, ret=%d, size=%d\n", n, nOut);
@@ -648,6 +669,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg3, sizeof(pMsg3), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_3");
     PRINTF("SendShielded_3, ret=%d, size=%d\n", n, nOut);
@@ -657,6 +679,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg4, sizeof(pMsg4), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_4");
     PRINTF("SendShielded_4, ret=%d, size=%d\n", n, nOut);
@@ -666,6 +689,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg5, sizeof(pMsg5), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_5");
     PRINTF("SendShielded_5, ret=%d, Data=%.*H\n", n, nOut, G_io_apdu_buffer);
@@ -675,6 +699,7 @@ void BeamStackTest5()
 
     nOut = sizeof(G_io_apdu_buffer);
     n = KeyKeeper_Invoke(pKk, pMsg6, sizeof(pMsg6), G_io_apdu_buffer, &nOut);
+    UNUSED(n);
 
     StackPrint(&hv, "SendShielded_6");
     PRINTF("SendShielded_6, ret=%d, Data=%.*H\n", n, nOut, G_io_apdu_buffer);
