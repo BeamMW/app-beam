@@ -299,7 +299,7 @@ uint8_t io_event(uint8_t channel __attribute__((unused))) {
             break;
         case SEPROXYHAL_TAG_TICKER_EVENT:
             UX_TICKER_EVENT(G_io_seproxyhal_spi_buffer, {});
-            PRINTF("OnTick %u\n", G_io_app.ms);
+            //PRINTF("OnTick %u\n", G_io_app.ms);
             void OnUiTick();
             OnUiTick();
             break;

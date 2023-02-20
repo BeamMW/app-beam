@@ -436,6 +436,11 @@ void BeamStackTest2()
 
     StackPrint(&s, "CreateOutput");
     PRINTF("ret=%d\n", n);
+
+    PRINTF("tauX = %.*H\n", sizeof(s.u.p6.m_Out.m_TauX.m_pVal), s.u.p6.m_Out.m_TauX.m_pVal);
+    PRINTF("T1 = %.*H\n", sizeof(s.u.p6.m_Out.m_pT[0]), s.u.p6.m_Out.m_pT);
+    PRINTF("T2 = %.*H\n", sizeof(s.u.p6.m_Out.m_pT[1]), s.u.p6.m_Out.m_pT + 1);
+
     Alert("CreateOutput", n);
 }
 
