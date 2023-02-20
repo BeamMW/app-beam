@@ -966,6 +966,158 @@ void OnUiTick()
     }
 }
 
+#ifdef BeamCrypto_ExternalGej
+
+uint8_t g_GejExt_Status = 0;
+
+void Gej_OnRet(cx_err_t res)
+{
+    if (CX_OK != res)
+    {
+        g_GejExt_Status |= 2;
+    }
+}
+
+int Gej_Finalyze()
+{
+    if (1 & g_GejExt_Status)
+    {
+        cx_bn_unlock();
+    }
+
+    int ret = !(2 & g_GejExt_Status);
+    g_GejExt_Status = 0;
+
+    return ret;
+}
+
+void Gej_Init(gej_t* p)
+{
+    p->curve = CX_CURVE_NONE;
+}
+
+int Gej_Is_infinity(const gej_t* p)
+{
+    return CX_CURVE_NONE == p->curve;
+}
+
+void Gej_Destroy(gej_t* p)
+{
+    if (!Gej_Is_infinity(p))
+    {
+
+        cx_ecpoint_destroy(p);
+        p->curve = CX_CURVE_NONE;
+    }
+}
+
+void Gej_OnRet_Pt(gej_t* p, cx_err_t res)
+{
+    if (CX_EC_INFINITE_POINT == res)
+    {
+        Gej_Destroy(p);
+    }
+    else
+        Gej_OnRet(res);
+}
+
+void Gej_AllocSafe(gej_t* p)
+{
+    if (Gej_Is_infinity(p))
+    {
+        if (!g_GejExt_Status)
+        {
+            cx_err_t res = cx_bn_lock(CX_BN_WORD_ALIGNEMENT, 0);
+            if (CX_OK == res)
+                g_GejExt_Status |= 1;
+            else
+                g_GejExt_Status |= 2; // error
+        }
+
+        Gej_OnRet(cx_ecpoint_alloc(p, CX_CURVE_SECP256K1));
+    }
+}
+
+void Gej_CloneSafe(gej_t* p, const gej_t* b)
+{
+    assert(!Gej_Is_infinity(b));
+    if (p != b)
+    {
+        Gej_AllocSafe(p);
+        Gej_OnRet(cx_ecpoint_init_bn(p, b->x, b->y));
+    }
+}
+
+void Gej_Add(gej_t* p, const gej_t* a, const gej_t* b)
+{
+    if (Gej_Is_infinity(a))
+    {
+        if (Gej_Is_infinity(b))
+            Gej_Destroy(p);
+        else
+            Gej_CloneSafe(p, b);
+    }
+    else
+    {
+        if (Gej_Is_infinity(b))
+            Gej_CloneSafe(p, a);
+        else
+        {
+            Gej_AllocSafe(p);
+            Gej_OnRet_Pt(p, cx_ecpoint_add(p, a, b));
+        }
+    }
+}
+
+void Gej_Mul_Ub(gej_t* p, const gej_t* a, const UintBig* k, int bFast)
+{
+    if (Gej_Is_infinity(a))
+        Gej_Destroy(p);
+    else
+    {
+        Gej_CloneSafe(p, a);
+
+        cx_err_t res = bFast ?
+            cx_ecpoint_scalarmul(p, k->m_pVal, sizeof(k->m_pVal)) :
+            cx_ecpoint_rnd_scalarmul(p, k->m_pVal, sizeof(k->m_pVal));
+
+        Gej_OnRet_Pt(p, res);
+    }
+}
+
+void Gej_Mul2_Fast(gej_t* p, const gej_t* a, const UintBig* ka, const gej_t* b, const UintBig* kb)
+{
+    if (Gej_Is_infinity(a))
+        Gej_Mul_Ub(p, b, kb, 1);
+    else
+    {
+        if (Gej_Is_infinity(b))
+            Gej_Mul_Ub(p, a, ka, 1);
+        else
+        {
+            Gej_AllocSafe(p);
+            cx_err_t res = cx_ecpoint_double_scalarmul(p, a, b, ka->m_pVal, sizeof(ka->m_pVal), kb->m_pVal, sizeof(kb->m_pVal));
+            Gej_OnRet_Pt(p, res);
+        }
+    }
+
+}
+
+void Gej_Set_Affine(gej_t* p, const AffinePoint* pAp)
+{
+    Gej_AllocSafe(p);
+    Gej_OnRet(cx_ecpoint_init(p, pAp->m_X.m_pVal, sizeof(pAp->m_X.m_pVal), pAp->m_Y.m_pVal, sizeof(pAp->m_Y.m_pVal)));
+}
+
+void Gej_Get_Affine(const gej_t* p, AffinePoint* pAp)
+{
+    assert(!Gej_Is_infinity(p));
+    Gej_OnRet(cx_ecpoint_export(p, pAp->m_X.m_pVal, sizeof(pAp->m_X.m_pVal), pAp->m_Y.m_pVal, sizeof(pAp->m_Y.m_pVal)));
+}
+
+#endif // BeamCrypto_ExternalGej
+
+
 void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSizeOut)
 {
     if (!g_Computing.m_TicksRemaining)
@@ -981,6 +1133,12 @@ void OnBeamHostRequest(uint8_t* pIn, uint32_t nIn, uint8_t* pOut, uint32_t* pSiz
     g_Computing.m_TicksRemaining = 20; // 2 seconds
 
     uint16_t errCode = KeyKeeper_Invoke(KeyKeeper_Get(), pIn, nIn, pOut, pSizeOut);
+
+#ifdef BeamCrypto_ExternalGej
+    if (!Gej_Finalyze())
+        errCode = c_KeyKeeper_Status_InternalError;
+#endif // BeamCrypto_ExternalGej
+
     if (c_KeyKeeper_Status_Ok == errCode)
         pOut[0] = c_KeyKeeper_Status_Ok;
     else

@@ -171,6 +171,7 @@ void BeamStackTest1()
     memset(&u.p2.s2, 0x6c, sizeof(u.p2.s2));
     memset(&u.p2.mmCtx, 0, sizeof(u.p2.mmCtx));
 
+#ifndef BeamCrypto_ExternalGej
     u.p2.mmCtx.m_pRes = &u.p2.gej;
     u.p2.mmCtx.m_Secure.m_Count = 1;
     u.p2.mmCtx.m_Secure.m_pK = &u.p2.s1;
@@ -185,6 +186,7 @@ void BeamStackTest1()
     MultiMac_Calculate(&u.p2.mmCtx);
 
     StackPrint(&u, "MultiMac_Calculate");
+#endif // BeamCrypto_ExternalGej
 
 
     StackMark();
