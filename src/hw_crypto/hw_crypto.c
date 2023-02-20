@@ -99,6 +99,92 @@ void Suffer(uint16_t n)
 
 #endif // TARGET_NANOS
 
+#ifdef BeamCrypto_ExternalGej
+
+
+typedef gej_t CustomGenerator;
+
+void Gej_Mul(gej_t* p, const gej_t* a, const secp256k1_scalar* k, int bFast)
+{
+	UintBig s;
+	secp256k1_scalar_get_b32(s.m_pVal, k);
+
+	Gej_Mul_Ub(p, a, &s, bFast);
+
+	if (!bFast)
+		SECURE_ERASE_OBJ(s);
+}
+
+
+void Gej_MulFast(gej_t* p, const gej_t* a, const secp256k1_scalar* k)
+{
+	Gej_Mul(p, a, k, 1);
+}
+
+void Gej_MulSecure(gej_t* p, const gej_t* a, const secp256k1_scalar* k)
+{
+	Gej_Mul(p, a, k, 0);
+}
+
+void Point_Gej_from_Ge(gej_t* p, const secp256k1_ge* pGe)
+{
+	if (secp256k1_ge_is_infinity(pGe))
+		Gej_Destroy(p);
+	else
+	{
+		AffinePoint ap;
+
+		secp256k1_fe_normalize((secp256k1_fe*) &pGe->x); // seems unnecessary, but ok
+		secp256k1_fe_normalize((secp256k1_fe*) &pGe->y);
+
+		secp256k1_fe_get_b32(ap.m_X.m_pVal, &pGe->x);
+		secp256k1_fe_get_b32(ap.m_Y.m_pVal, &pGe->y);
+
+		Gej_Set_Affine(p, &ap);
+	}
+}
+
+void Point_Ge_from_Affine(secp256k1_ge* pGe, const AffinePoint* pAp)
+{
+	secp256k1_fe_set_b32(&pGe->x, pAp->m_X.m_pVal);
+	secp256k1_fe_set_b32(&pGe->y, pAp->m_Y.m_pVal);
+	pGe->infinity = 0;
+}
+
+__stack_hungry__
+void Point_Ge_from_Gej(secp256k1_ge* pGe, const gej_t* p)
+{
+	if (Gej_Is_infinity(p))
+		pGe->infinity = 1; // no specific function like secp256k1_ge_set_infinity
+	else
+	{
+		AffinePoint ap;
+		Gej_Get_Affine(p, &ap);
+
+		Suffer(1000); // Very heavy
+
+		Point_Ge_from_Affine(pGe, &ap);
+	}
+}
+
+#else // BeamCrypto_ExternalGej
+
+typedef secp256k1_gej gej_t;
+
+void Gej_Init(gej_t* p)
+{
+	UNUSED(p);
+}
+
+void Gej_Destroy(gej_t* p)
+{
+	UNUSED(p);
+}
+
+int Gej_Is_infinity(const gej_t* p)
+{
+	return secp256k1_gej_is_infinity(p);
+}
 
 //////////////////////////////
 // MultiMac
@@ -284,24 +370,35 @@ static void MultiMac_Calculate_LoadFast(const MultiMac_Context* p, secp256k1_ge*
 	secp256k1_ge_from_storage(pGe, p->m_Fast.m_pGen0 + n);
 }
 
+#endif // BeamCrypto_ExternalGej
+
+void Point_Gej_from_Ge(gej_t*, const secp256k1_ge*);
+void Point_Ge_from_Gej(secp256k1_ge*, const gej_t*);
+
 __stack_hungry__
-static void wrap_gej_add_ge_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b /*, secp256k1_fe* rzr */)
+static void wrap_gej_add_ge_var(gej_t* r, const gej_t* a, const secp256k1_ge* b /*, secp256k1_fe* rzr */)
 {
+#ifdef BeamCrypto_ExternalGej
+	gej_t gej;
+	Gej_Init(&gej);
+	Point_Gej_from_Ge(&gej, b);
+	Gej_Add(r, a, &gej);
+	Gej_Destroy(&gej);
+
+#else // BeamCrypto_ExternalGej
 	secp256k1_gej_add_ge_var(r, a, b, 0 /* rzr */);
+#endif // BeamCrypto_ExternalGej
 	Suffer(12); // 9 mul, 3 sqr
 }
 
 __stack_hungry__
-static void wrap_gej_add_zinv_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_ge* b, const secp256k1_fe* bzinv)
+static void wrap_gej_add_var(gej_t* r, const gej_t* a, const gej_t* b /*, secp256k1_fe* rzr */)
 {
-	secp256k1_gej_add_zinv_var(r, a, b, bzinv);
-	Suffer(13); // 10 mul, 3 sqr
-}
-
-__stack_hungry__
-static void wrap_gej_add_var(secp256k1_gej* r, const secp256k1_gej* a, const secp256k1_gej* b /*, secp256k1_fe* rzr */)
-{
+#ifdef BeamCrypto_ExternalGej
+	Gej_Add(r, a, b);
+#else // BeamCrypto_ExternalGej
 	secp256k1_gej_add_var(r, a, b, 0 /* rzr */);
+#endif // BeamCrypto_ExternalGej
 	Suffer(16); // 12 mul, 4 sqr
 }
 
@@ -323,12 +420,12 @@ static void wrap_scalar_inverse(secp256k1_scalar* r, const secp256k1_scalar* a)
 	Suffer(300); // very heavy: inverse + misc
 }
 
+#ifndef BeamCrypto_ExternalGej
 static void wrap_fe_mul(secp256k1_fe* r, const secp256k1_fe* a, const secp256k1_fe* b)
 {
 	secp256k1_fe_mul(r, a, b);
 	Suffer(1);
 }
-
 
 __stack_hungry__
 static void wrap_ge_neg(secp256k1_ge* r, const secp256k1_ge* a)
@@ -337,10 +434,17 @@ static void wrap_ge_neg(secp256k1_ge* r, const secp256k1_ge* a)
 }
 
 __stack_hungry__
-static void wrap_gej_double_var(secp256k1_gej* r, const secp256k1_gej* a/*, secp256k1_fe* rzr*/)
+static void wrap_gej_double_var(gej_t* r, const gej_t* a/*, secp256k1_fe* rzr*/)
 {
 	secp256k1_gej_double_var(r, a, 0 /* rzr */);
 	Suffer(7); // 3 mul, 4 sqr
+}
+
+__stack_hungry__
+static void wrap_gej_add_zinv_var(gej_t* r, const gej_t* a, const secp256k1_ge* b, const secp256k1_fe* bzinv)
+{
+	secp256k1_gej_add_zinv_var(r, a, b, bzinv);
+	Suffer(13); // 10 mul, 3 sqr
 }
 
 __stack_hungry__
@@ -491,7 +595,7 @@ void MultiMac_Calculate(MultiMac_Context* p)
 //////////////////////////////
 // Batch normalization
 __stack_hungry__
-static void secp256k1_gej_rescale_To_ge(secp256k1_gej* pGej, const secp256k1_fe* pZ)
+static void secp256k1_gej_rescale_To_ge(gej_t* pGej, const secp256k1_fe* pZ)
 {
 	// equivalent of secp256k1_gej_rescale, but doesn't change z coordinate
 	// A bit more effective when the value of z is known in advance (such as when normalizing)
@@ -510,7 +614,7 @@ static void secp256k1_gej_rescale_To_ge(secp256k1_gej* pGej, const secp256k1_fe*
 	pGe->infinity = 0;
 }
 
-void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1_fe* pBuf, secp256k1_fe* pZDenom, int bNormalize)
+void Point_Gej_BatchRescale(gej_t*  pGej, unsigned int nCount, secp256k1_fe* pBuf, secp256k1_fe* pZDenom, int bNormalize)
 {
 	int iPrev = -1;
 	for (unsigned int i = 0; i < nCount; i++)
@@ -578,7 +682,7 @@ void Point_Gej_BatchRescale(secp256k1_gej*  pGej, unsigned int nCount, secp256k1
 }
 
 __stack_hungry__
-void Point_Gej_2_Normalize(secp256k1_gej* pGej)
+void Point_Gej_2_Normalize(gej_t* pGej)
 {
 	secp256k1_fe pBuf[2];
 	secp256k1_fe zDenom;
@@ -591,12 +695,12 @@ typedef struct
 	secp256k1_fe m_zDenom;
 } CustomGenerator;
 
-void Point_CalculateOdds(secp256k1_gej* pOdds, uint32_t n, const secp256k1_ge* pGe)
+void Point_CalculateOdds(gej_t* pOdds, uint32_t n, const secp256k1_ge* pGe)
 {
 	assert(n);
 	Point_Gej_from_Ge(pOdds, pGe);
 
-	secp256k1_gej* const pX2 = pOdds + n - 1;
+	gej_t* const pX2 = pOdds + n - 1;
 	wrap_gej_double_var(pX2, pOdds);
 
 	for (uint32_t i = 1; i < n; i++)
@@ -606,7 +710,7 @@ void Point_CalculateOdds(secp256k1_gej* pOdds, uint32_t n, const secp256k1_ge* p
 	}
 }
 
-void Point_Gej_ToCommonDenominator(secp256k1_gej* pOdds, uint32_t n, secp256k1_ge_storage* pRes, secp256k1_fe* pZDenom)
+void Point_Gej_ToCommonDenominator(gej_t* pOdds, uint32_t n, secp256k1_ge_storage* pRes, secp256k1_fe* pZDenom)
 {
 	// to common denominator
 	static_assert(sizeof(secp256k1_fe) <= sizeof(secp256k1_ge_storage), "Need this to temporary use its memory");
@@ -623,12 +727,13 @@ void MultiMac_Fast_Custom_Init(CustomGenerator* p, const secp256k1_ge* pGe)
 	assert(!secp256k1_ge_is_infinity(pGe));
 
 	// calculate odd powers
-	secp256k1_gej pOdds[_countof(p->m_pPt)];
+	gej_t pOdds[_countof(p->m_pPt)];
 
 	Point_CalculateOdds(pOdds, _countof(pOdds), pGe);
 
 	Point_Gej_ToCommonDenominator(pOdds, _countof(pOdds), p->m_pPt, &p->m_zDenom);
 }
+#endif // BeamCrypto_ExternalGej
 
 void secp256k1_hmac_sha256_write_UintBig(secp256k1_hmac_sha256_t* pHMac, const UintBig* p)
 {
@@ -741,24 +846,26 @@ void Point_Compact_from_Ge(CompactPoint* pCompact, const secp256k1_ge* pGe)
 	pCompact->m_Y = Point_Compact_from_Ge_Ex(&pCompact->m_X, pGe);
 }
 
-void Point_Compact_from_Gej(CompactPoint* pCompact, const secp256k1_gej* pGej)
+void Point_Compact_from_Gej(CompactPoint* pCompact, const gej_t* pGej)
 {
 	secp256k1_ge ge;
 	Point_Ge_from_Gej(&ge, pGej);
 	Point_Compact_from_Ge(pCompact, &ge);
 }
 
-uint8_t Point_Compact_from_Gej_Ex(UintBig* pX, const secp256k1_gej* pGej)
+uint8_t Point_Compact_from_Gej_Ex(UintBig* pX, const gej_t* pGej)
 {
 	secp256k1_ge ge;
 	Point_Ge_from_Gej(&ge, pGej);
 	return Point_Compact_from_Ge_Ex(pX, &ge);
 }
 
-void Point_Gej_from_Ge(secp256k1_gej* pGej, const secp256k1_ge* pGe)
+#ifndef BeamCrypto_ExternalGej
+void Point_Gej_from_Ge(gej_t* pGej, const secp256k1_ge* pGe)
 {
 	secp256k1_gej_set_ge(pGej, pGe);
 }
+#endif // BeamCrypto_ExternalGej
 
 int Point_Ge_from_CompactNnz(secp256k1_ge* pGe, const CompactPoint* pCompact)
 {
@@ -787,13 +894,17 @@ int Point_Ge_from_Compact(secp256k1_ge* pGe, const CompactPoint* pCompact)
 	return 1;
 }
 
-void Point_Ge_from_Gej(secp256k1_ge* pGe, const secp256k1_gej* pGej)
+#ifdef BeamCrypto_ExternalGej
+
+void MulPoint(gej_t* pGej, const AffinePoint* pGen, const secp256k1_scalar* pK)
 {
-	secp256k1_ge_set_gej_var(pGe, (secp256k1_gej*) pGej); // expensive, better to a batch convertion
-	Suffer(1000); // Very heavy
+	Gej_Set_Affine(pGej, pGen);
+	Gej_MulSecure(pGej, pGej, pK);
 }
 
-void MulPoint(secp256k1_gej* pGej, const MultiMac_Secure* pGen, const secp256k1_scalar* pK)
+#else // BeamCrypto_ExternalGej
+
+void MulPoint(gej_t* pGej, const MultiMac_Secure* pGen, const secp256k1_scalar* pK)
 {
 	MultiMac_Context ctx;
 	ctx.m_pRes = pGej;
@@ -805,12 +916,20 @@ void MulPoint(secp256k1_gej* pGej, const MultiMac_Secure* pGen, const secp256k1_
 	MultiMac_Calculate(&ctx);
 }
 
-void MulG(secp256k1_gej* pGej, const secp256k1_scalar* pK)
+void Point_Ge_from_Gej(secp256k1_ge* pGe, const gej_t* pGej)
+{
+	secp256k1_ge_set_gej_var(pGe, (gej_t*) pGej); // expensive, better to a batch convertion
+	Suffer(1000); // Very heavy
+}
+
+#endif // BeamCrypto_ExternalGej
+
+void MulG(gej_t* pGej, const secp256k1_scalar* pK)
 {
 	MulPoint(pGej, Context_get()->m_pGenGJ, pK);
 }
 
-void MulJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
+void MulJ(gej_t* pGej, const secp256k1_scalar* pK)
 {
 	MulPoint(pGej, Context_get()->m_pGenGJ + 1, pK);
 }
@@ -818,12 +937,15 @@ void MulJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
 __stack_hungry__
 void Sk2Pk(UintBig* pRes, secp256k1_scalar* pK)
 {
-	secp256k1_gej gej;
+	gej_t gej;
+	Gej_Init(&gej);
 	MulG(&gej, pK);
 
 	uint8_t y = Point_Compact_from_Gej_Ex(pRes, &gej);
 	if (y)
 		secp256k1_scalar_negate(pK, pK);
+
+	Gej_Destroy(&gej);
 }
 
 void secp256k1_sha256_write_UintBig(secp256k1_sha256_t* pSha, const UintBig* p)
@@ -945,16 +1067,20 @@ void secp256k1_sha256_write_Ge(secp256k1_sha256_t* pSha, const secp256k1_ge* pGe
 	secp256k1_sha256_write_CompactPoint(pSha, &pt);
 }
 
-void secp256k1_sha256_write_Gej_converted(secp256k1_sha256_t* pSha, const secp256k1_gej* pGej)
-{
-	secp256k1_sha256_write_Ge(pSha, (secp256k1_ge*) pGej);
-}
-
-void secp256k1_sha256_write_Gej(secp256k1_sha256_t* pSha, const secp256k1_gej* pGej) // expensive
+void secp256k1_sha256_write_Gej(secp256k1_sha256_t* pSha, const gej_t* pGej) // expensive
 {
 	secp256k1_ge ge;
 	Point_Ge_from_Gej(&ge, pGej);
 	secp256k1_sha256_write_Ge(pSha, &ge);
+}
+
+void secp256k1_sha256_write_Gej_converted(secp256k1_sha256_t* pSha, const gej_t* pGej)
+{
+#ifdef BeamCrypto_ExternalGej
+	secp256k1_sha256_write_Gej(pSha, pGej);
+#else // BeamCrypto_ExternalGej
+	secp256k1_sha256_write_Ge(pSha, (secp256k1_ge*)pGej);
+#endif // BeamCrypto_ExternalGej
 }
 
 __stack_hungry__
@@ -1102,19 +1228,50 @@ void CoinID_GenerateAGen(AssetID aid, CustomGenerator* pAGen)
 {
 	assert(aid);
 
+#ifdef BeamCrypto_ExternalGej
+
+	secp256k1_ge ge;
+	CoinID_GetAssetGen(aid, &ge);
+	Point_Gej_from_Ge(pAGen, &ge);
+
+#else // BeamCrypto_ExternalGej
+
 	static_assert(sizeof(*pAGen) >= sizeof(secp256k1_ge), "");
 
 	CoinID_GetAssetGen(aid, (secp256k1_ge*) pAGen);
 	MultiMac_Fast_Custom_Init(pAGen, (secp256k1_ge*) pAGen);
+
+#endif // BeamCrypto_ExternalGej
 }
 
 __stack_hungry__
-void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, const CustomGenerator* pAGen, secp256k1_gej* pGej)
+void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, const CustomGenerator* pAGen, gej_t* pGej)
 {
-	MultiMac_WNaf wnaf;
 	Context* pCtx = Context_get();
 
 	// sk*G + v*H
+
+#ifdef BeamCrypto_ExternalGej
+
+	MulG(pGej, pkG);
+
+	gej_t gej;
+	Gej_Init(&gej);
+
+	if (!pAGen)
+	{
+		Gej_Set_Affine(&gej, &pCtx->m_GenH);
+		pAGen = &gej;
+	}
+
+	Gej_MulFast(&gej, pAGen, pkH);
+	Gej_Add(pGej, pGej, &gej);
+
+	Gej_Destroy(&gej);
+
+#else // BeamCrypto_ExternalGej
+
+	MultiMac_WNaf wnaf;
 	MultiMac_Context mmCtx;
 	mmCtx.m_pRes = pGej;
 	mmCtx.m_Secure.m_Count = 1;
@@ -1138,10 +1295,11 @@ void CoinID_getCommRawEx(const secp256k1_scalar* pkG, secp256k1_scalar* pkH, con
 	}
 
 	MultiMac_Calculate(&mmCtx);
+#endif // BeamCrypto_ExternalGej
 }
 
 //__stack_hungry__
-void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, const CustomGenerator* pAGen, secp256k1_gej* pGej)
+void CoinID_getCommRaw(const secp256k1_scalar* pK, Amount amount, const CustomGenerator* pAGen, gej_t* pGej)
 {
 	secp256k1_scalar kH;
 	secp256k1_scalar_set_u64(&kH, amount);
@@ -1162,7 +1320,7 @@ static void CoinID_getSkNonSwitch(const Kdf* pKdf, const CoinID* pCid, secp256k1
 }
 
 __stack_hungry__
-static void CoinID_getSkSwitchDelta(secp256k1_scalar* pK, const secp256k1_gej* pCommsNorm)
+static void CoinID_getSkSwitchDelta(secp256k1_scalar* pK, const gej_t* pCommsNorm)
 {
 	Oracle oracle;
 	Oracle_Init(&oracle);
@@ -1176,12 +1334,16 @@ static void CoinID_getSkSwitchDelta(secp256k1_scalar* pK, const secp256k1_gej* p
 __stack_hungry__
 static void CoinID_getSkComm_FromNonSwitchK(const CoinID* pCid, secp256k1_scalar* pK, CompactPoint* pComm, const CustomGenerator* pAGen)
 {
-	secp256k1_gej pGej[2];
+	gej_t pGej[2];
+	Gej_Init(pGej);
+	Gej_Init(pGej + 1);
 
 	CoinID_getCommRaw(pK, pCid->m_Amount, pAGen, pGej); // sk*G + amount*H(aid)
 	MulJ(pGej + 1, pK); // sk*J
 
+#ifndef BeamCrypto_ExternalGej
 	Point_Gej_2_Normalize(pGej);
+#endif // BeamCrypto_ExternalGej
 
 	secp256k1_scalar kDelta;
 	CoinID_getSkSwitchDelta(&kDelta, pGej);
@@ -1192,11 +1354,18 @@ static void CoinID_getSkComm_FromNonSwitchK(const CoinID* pCid, secp256k1_scalar
 	{
 		MulG(pGej + 1, &kDelta);
 
+#ifdef BeamCrypto_ExternalGej
+		wrap_gej_add_var(pGej + 1, pGej + 1, pGej);
+#else // BeamCrypto_ExternalGej
 		// pGej[0] is ge
-
 		wrap_gej_add_ge_var(pGej + 1, pGej + 1, (secp256k1_ge*) pGej);
+#endif // BeamCrypto_ExternalGej
+
 		Point_Compact_from_Gej(pComm, pGej + 1);
 	}
+
+	Gej_Destroy(pGej + 1);
+	Gej_Destroy(pGej);
 }
 
 __stack_hungry__
@@ -1205,10 +1374,18 @@ void CoinID_getSkComm(const Kdf* pKdf, const CoinID* pCid, secp256k1_scalar* pK,
 	CoinID_getSkNonSwitch(pKdf, pCid, pK);
 
 	CustomGenerator aGen;
+#ifdef BeamCrypto_ExternalGej
+	Gej_Init(&aGen);
+#endif // BeamCrypto_ExternalGej
+
 	if (pCid->m_AssetID)
 		CoinID_GenerateAGen(pCid->m_AssetID, &aGen);
 
 	CoinID_getSkComm_FromNonSwitchK(pCid, pK, pComm, pCid->m_AssetID ? &aGen : 0);
+
+#ifdef BeamCrypto_ExternalGej
+	Gej_Destroy(&aGen);
+#endif // BeamCrypto_ExternalGej
 }
 
 __stack_hungry__
@@ -1237,7 +1414,7 @@ static void ShieldedInput_getSk(const KeyKeeper* p, const ShieldedInput_Blob* pI
 typedef struct
 {
 	NonceGenerator m_NonceGen; // 88 bytes
-	secp256k1_gej m_pGej[2]; // 248 bytes
+	gej_t m_pGej[2]; // 248 bytes
 
 	// 97 bytes. This can be saved, at expense of calculating them again (CoinID_getSkComm)
 	secp256k1_scalar m_sk;
@@ -1321,6 +1498,19 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 
 	static_assert(Calc_S_Naggle <= Calc_S_Naggle_Max, "Naggle too large");
 
+#ifdef BeamCrypto_ExternalGej
+
+	secp256k1_scalar s;
+	NonceGenerator_NextScalar(&pWrk->m_NonceGen, &s);
+	MulG(pWrk->m_pGej + 1, &s); // can mul fast!
+
+	gej_t gej2;
+	Gej_Init(&gej2);
+
+	UintBig pK[2];
+
+#else // BeamCrypto_ExternalGej
+
 	secp256k1_scalar pS[Calc_S_Naggle];
 	MultiMac_WNaf pWnaf[Calc_S_Naggle];
 
@@ -1342,8 +1532,14 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 	mmCtx.m_Fast.m_pWnaf = pWnaf;
 	mmCtx.m_Fast.m_pGen0 = Context_get()->m_pGenRangeproof[0];
 
-	for (unsigned int iBit = 0; iBit < nDims * 2; iBit++, mmCtx.m_Fast.m_Count++)
+#endif // BeamCrypto_ExternalGej
+
+	for (unsigned int iBit = 0; iBit < nDims * 2; iBit++)
 	{
+#ifdef BeamCrypto_ExternalGej
+		secp256k1_scalar* const pTrg = &s;
+#else // BeamCrypto_ExternalGej
+
 		if (Calc_S_Naggle == mmCtx.m_Fast.m_Count)
 		{
 			// flush
@@ -1358,27 +1554,77 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 			mmCtx.m_Fast.m_pGen0 += Calc_S_Naggle * c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof);
 		}
 
-		NonceGenerator_NextScalar(&pWrk->m_NonceGen, pS + mmCtx.m_Fast.m_Count);
+		secp256k1_scalar* const pTrg = pS + mmCtx.m_Fast.m_Count;
+
+#endif // BeamCrypto_ExternalGej
+
+		NonceGenerator_NextScalar(&pWrk->m_NonceGen, pTrg);
 
 		if (!(iBit % nDims) && p->m_pKExtra)
 		{
 			// embed more info
 			int overflow;
 			secp256k1_scalar_set_b32(p->m_pTauX, p->m_pKExtra[iBit / nDims].m_pVal, &overflow);
-			wrap_scalar_add(pS + mmCtx.m_Fast.m_Count, pS + mmCtx.m_Fast.m_Count, p->m_pTauX);
+			wrap_scalar_add(pTrg, pTrg, p->m_pTauX);
 		}
+
+#ifdef BeamCrypto_ExternalGej
+
+		secp256k1_scalar_get_b32(pK[1 & iBit].m_pVal, &s);
+
+		if (1 & iBit)
+		{
+			Gej_Set_Affine(pWrk->m_pGej, Context_get()->m_pGenRangeproof[iBit - 1]);
+			Gej_Set_Affine(&gej2, Context_get()->m_pGenRangeproof[iBit]);
+
+			Gej_Mul2_Fast(pWrk->m_pGej, pWrk->m_pGej, pK, &gej2, pK + 1);
+
+			Gej_Add(pWrk->m_pGej + 1, pWrk->m_pGej + 1, pWrk->m_pGej);
+		}
+
+#else // BeamCrypto_ExternalGej
+		mmCtx.m_Fast.m_Count++;
+#endif // BeamCrypto_ExternalGej
 	}
 
+#ifdef BeamCrypto_ExternalGej
+	Gej_Destroy(&gej2);
+#else // BeamCrypto_ExternalGej
 	mmCtx.m_pRes = pWrk->m_pGej + 1;
 	MultiMac_Calculate(&mmCtx);
 
 	if (Calc_S_Naggle < Calc_S_Naggle_Max)
 		wrap_gej_add_var(pWrk->m_pGej + 1, pWrk->m_pGej + 1, pWrk->m_pGej);
+#endif // BeamCrypto_ExternalGej
 }
 
-static void RangeProof_Calculate_A_Bits(secp256k1_gej* pRes, secp256k1_ge* pGeTmp, Amount v)
+static void RangeProof_Calculate_A_Bits(gej_t* pRes, secp256k1_ge* pGeTmp, Amount v)
 {
 	Context* pCtx = Context_get();
+
+#ifdef BeamCrypto_ExternalGej
+
+	gej_t gej;
+	Gej_Init(&gej);
+
+	for (uint32_t i = 0; i < nDims; i++)
+	{
+		if (1 & (v >> i))
+			Gej_Set_Affine(&gej, pCtx->m_pGenRangeproof[i]);
+		else
+		{
+			Point_Ge_from_Affine(pGeTmp, pCtx->m_pGenRangeproof[nDims + i]);
+			secp256k1_ge_neg(pGeTmp, pGeTmp);
+			Point_Gej_from_Ge(&gej, pGeTmp);
+		}
+
+		Gej_Add(pRes, pRes, &gej);
+	}
+
+	Gej_Destroy(&gej);
+
+#else // BeamCrypto_ExternalGej
+
 	for (uint32_t i = 0; i < nDims; i++)
 	{
 		if (1 & (v >> i))
@@ -1391,6 +1637,8 @@ static void RangeProof_Calculate_A_Bits(secp256k1_gej* pRes, secp256k1_ge* pGeTm
 
 		wrap_gej_add_ge_var(pRes, pRes, pGeTmp);
 	}
+
+#endif // BeamCrypto_ExternalGej
 }
 
 __stack_hungry__
@@ -1404,8 +1652,10 @@ static int RangeProof_Calculate_After_S(RangeProof* const p, RangeProof_Worker* 
 		RangeProof_Calculate_A_Bits(pWrk->m_pGej, &geTmp, p->m_Cid.m_Amount);
 	}
 
+#ifndef BeamCrypto_ExternalGej
 	// normalize A,S at once, feed them to Oracle, get the challenges
 	Point_Gej_2_Normalize(pWrk->m_pGej);
+#endif // BeamCrypto_ExternalGej
 
 	secp256k1_scalar pK[2];
 
@@ -1468,11 +1718,17 @@ static int RangeProof_Calculate_After_S(RangeProof* const p, RangeProof_Worker* 
 	if (ok)
 	{
 		// normalize & expose
+#ifndef BeamCrypto_ExternalGej
 		Point_Gej_2_Normalize(pWrk->m_pGej);
+#endif // BeamCrypto_ExternalGej
 
 		for (unsigned int i = 0; i < 2; i++)
 		{
+#ifdef BeamCrypto_ExternalGej
+			Point_Compact_from_Gej(p->m_pT_Out + i, pWrk->m_pGej + i);
+#else // BeamCrypto_ExternalGej
 			Point_Compact_from_Ge(p->m_pT_Out + i, (secp256k1_ge*) (pWrk->m_pGej + i));
+#endif // BeamCrypto_ExternalGej
 			secp256k1_sha256_write_CompactPoint(&oracle.m_sha, p->m_pT_Out + i);
 		}
 
@@ -1505,13 +1761,20 @@ __stack_hungry__
 int RangeProof_Calculate(RangeProof* p)
 {
 	RangeProof_Worker wrk;
+	Gej_Init(wrk.m_pGej);
+	Gej_Init(wrk.m_pGej + 1);
 
 	CoinID_getSkComm(p->m_pKdf, &p->m_Cid, &wrk.m_sk, &wrk.m_Commitment);
 
 	RangeProof_Calculate_Before_S(p, &wrk);
 	RangeProof_Calculate_S(p, &wrk);
 
-	return RangeProof_Calculate_After_S(p, &wrk);
+	int res = RangeProof_Calculate_After_S(p, &wrk);
+
+	Gej_Destroy(wrk.m_pGej + 1);
+	Gej_Destroy(wrk.m_pGej);
+
+	return res;
 }
 
 typedef struct
@@ -1637,15 +1900,19 @@ static int RangeProof_Recover1(RangeProof_Recovery_Context* pCtx)
 
 	// Recalculate p1.A, make sure we get the correct result
 	union {
-		secp256k1_gej comm;
+		gej_t comm;
 		CompactPoint pt;
 	} u;
 
 	secp256k1_ge ge;
+
+	Gej_Init(&u.comm);
 	MulG(&u.comm, &alpha_minus_params);
 	RangeProof_Calculate_A_Bits(&u.comm, &ge, pCtx->m_Amount);
 
 	Point_Ge_from_Gej(&ge, &u.comm);
+	Gej_Destroy(&u.comm);
+
 	Point_Compact_from_Ge(&u.pt, &ge);
 
 	if (memcmp(&u.pt, &pRep->m_A, sizeof(u.pt)))
@@ -1802,7 +2069,7 @@ void Signature_Sign(Signature* p, const UintBig* pMsg, const secp256k1_scalar* p
 	// get nonce
 	union {
 		secp256k1_hmac_sha256_t hmac;
-		secp256k1_gej gej;
+		gej_t gej;
 	} u2;
 
 	NonceGenerator ng;
@@ -1826,9 +2093,11 @@ void Signature_Sign(Signature* p, const UintBig* pMsg, const secp256k1_scalar* p
 	SECURE_ERASE_OBJ(ng);
 
 	// expose the nonce
+	Gej_Init(&u2.gej);
 	MulG(&u2.gej, &u.nonce);
 
 	Point_Compact_from_Gej(&p->m_NoncePub, &u2.gej);
+	Gej_Destroy(&u2.gej);
 
 	Signature_SignPartial(p, pMsg, pSk, &u.nonce);
 
@@ -1855,9 +2124,10 @@ void Signature_SignPartial(Signature* p, const UintBig* pMsg, const secp256k1_sc
 }
 
 __stack_hungry__
-static int Signature_IsValid_Internal(const Signature* p, const UintBig* pMsg, const CustomGenerator* pPkGen)
+static int Signature_IsValid_Internal(const Signature* p, const UintBig* pMsg, CustomGenerator* pPkGen)
 {
-	secp256k1_gej gej;
+	gej_t gej;
+	Gej_Init(&gej);
 
 	union
 	{
@@ -1874,35 +2144,54 @@ static int Signature_IsValid_Internal(const Signature* p, const UintBig* pMsg, c
 	// for historical reasons we don't check for overflow, i.e. theoretically there can be an ambiguity, but it makes not much sense for the attacker
 	secp256k1_scalar_set_b32(&u.p1.k, p->m_k.m_pVal, &u.p1.overflow);
 
+#ifdef BeamCrypto_ExternalGej
+	MulG(&gej, &u.p1.k);
+#else // BeamCrypto_ExternalGej
 	MultiMac_Context ctx;
 	ctx.m_pRes = &gej;
 	ctx.m_Secure.m_Count = 1;
 	ctx.m_Secure.m_pGen = Context_get()->m_pGenGJ;
 	ctx.m_Secure.m_pK = &u.p1.k;
 
+#endif // BeamCrypto_ExternalGej
+
 	if (!pPkGen)
+	{
 		// unlikely, but allowed for historical reasons
+#ifndef BeamCrypto_ExternalGej
 		ctx.m_Fast.m_Count = 0;
+#endif // BeamCrypto_ExternalGej
+	}
 	else
 	{
+		Signature_GetChallenge(p, pMsg, &u.p1.s);
+
+#ifdef BeamCrypto_ExternalGej
+		Gej_MulFast(pPkGen, pPkGen, &u.p1.s);
+		Gej_Add(&gej, &gej, pPkGen);
+#else // BeamCrypto_ExternalGej
 		ctx.m_Fast.m_Count = 1;
 		ctx.m_Fast.m_pZDenom = &pPkGen->m_zDenom;
 		ctx.m_Fast.m_pGen0 = pPkGen->m_pPt;
 		ctx.m_Fast.m_WndBits = c_MultiMac_nBits_Custom;
 		ctx.m_Fast.m_pK = &u.p1.s;
 		ctx.m_Fast.m_pWnaf = &u.p1.wnaf;
-
-		Signature_GetChallenge(p, pMsg, &u.p1.s);
+#endif // BeamCrypto_ExternalGej
 	}
 
+#ifndef BeamCrypto_ExternalGej
 	MultiMac_Calculate(&ctx);
+#endif // BeamCrypto_ExternalGej
 
-	if (!Point_Ge_from_Compact(&u.geNonce, &p->m_NoncePub))
-		return 0; // bad pub nonce
+	int res = Point_Ge_from_Compact(&u.geNonce, &p->m_NoncePub);
+	if (res)
+	{
+		wrap_gej_add_ge_var(&gej, &gej, &u.geNonce);
+		res = Gej_Is_infinity(&gej);
+	}
 
-	wrap_gej_add_ge_var(&gej, &gej, &u.geNonce);
-
-	return secp256k1_gej_is_infinity(&gej);
+	Gej_Destroy(&gej);
+	return res;
 }
 
 __stack_hungry__
@@ -1910,8 +2199,14 @@ int Signature_IsValid(const Signature* p, const UintBig* pMsg, const CompactPoin
 {
 	CustomGenerator gen; // very large
 
+#ifdef BeamCrypto_ExternalGej
+	secp256k1_ge ge;
+	secp256k1_ge* const pGe = &ge;
+#else // BeamCrypto_ExternalGej
+
 	static_assert(sizeof(gen) >= sizeof(secp256k1_ge), "");
 	secp256k1_ge* const pGe = (secp256k1_ge*)&gen;
+#endif // BeamCrypto_ExternalGej
 
 	if (!Point_Ge_from_Compact(pGe, pPk))
 		return 0; // bad Pubkey
@@ -1919,9 +2214,20 @@ int Signature_IsValid(const Signature* p, const UintBig* pMsg, const CompactPoin
 	if (secp256k1_ge_is_infinity(pGe))
 		return Signature_IsValid_Internal(p, pMsg, 0);
 
+#ifdef BeamCrypto_ExternalGej
+	Gej_Init(&gen);
+	Point_Gej_from_Ge(&gen, pGe);
+#else // BeamCrypto_ExternalGej
 	MultiMac_Fast_Custom_Init(&gen, pGe);
+#endif // #ifdef BeamCrypto_ExternalGej
 
-	return Signature_IsValid_Internal(p, pMsg, &gen);
+	int res = Signature_IsValid_Internal(p, pMsg, &gen);
+
+#ifdef BeamCrypto_ExternalGej
+	Gej_Destroy(&gen);
+#endif // BeamCrypto_ExternalGej
+
+	return res;
 }
 
 __stack_hungry__
@@ -2005,14 +2311,27 @@ static void Kdf2Pub(const Kdf* pKdf, KdfPub* pRes)
 {
 	pRes->m_Secret = pKdf->m_Secret;
 
-	secp256k1_gej pGej[2];
+	gej_t pGej[2];
+	Gej_Init(pGej);
+	Gej_Init(pGej + 1);
+
 	MulG(pGej, &pKdf->m_kCoFactor);
 	MulJ(pGej + 1, &pKdf->m_kCoFactor);
+
+#ifdef BeamCrypto_ExternalGej
+	Point_Compact_from_Gej(&pRes->m_CoFactorG, pGej);
+	Point_Compact_from_Gej(&pRes->m_CoFactorJ, pGej + 1);
+#else // #ifdef BeamCrypto_ExternalGej
 
 	Point_Gej_2_Normalize(pGej);
 
 	Point_Compact_from_Ge(&pRes->m_CoFactorG, (secp256k1_ge*) pGej);
 	Point_Compact_from_Ge(&pRes->m_CoFactorJ, (secp256k1_ge*) (pGej + 1));
+
+#endif // #ifdef BeamCrypto_ExternalGej
+
+	Gej_Destroy(pGej + 1);
+	Gej_Destroy(pGej);
 }
 
 __stack_hungry__
@@ -2206,7 +2525,7 @@ PROTO_METHOD(GetImage)
 		pIn->m_bG, // copy, coz it'd be overwritten by the result
 		pIn->m_bJ
 	};
-	secp256k1_gej pGej[_countof(pFlag)];
+	gej_t pGej[_countof(pFlag)];
 
 	unsigned int nCount = 0;
 
@@ -2215,6 +2534,7 @@ PROTO_METHOD(GetImage)
 		if (!pFlag[i])
 			continue;
 
+		Gej_Init(pGej + i);
 		MulPoint(pGej + i, Context_get()->m_pGenGJ + i, &sk);
 		nCount++;
 	}
@@ -2222,26 +2542,28 @@ PROTO_METHOD(GetImage)
 	if (!nCount)
 		return c_KeyKeeper_Status_Unspecified;
 
+#ifndef BeamCrypto_ExternalGej
 	if (_countof(pGej) == nCount)
 		Point_Gej_2_Normalize(pGej);
+#endif // BeamCrypto_ExternalGej
 
 	CompactPoint* pRes = &pOut->m_ptImageG;
 
 	for (unsigned int i = 0; i < _countof(pGej); i++)
 	{
-		if (_countof(pGej) == nCount)
-			Point_Compact_from_Ge(pRes + i, (secp256k1_ge*) (pGej + i));
-		else
+		if (pFlag[i])
 		{
-			if (pFlag[i])
-			{
-				secp256k1_ge ge;
-				Point_Ge_from_Gej(&ge, pGej + i);
-				Point_Compact_from_Ge(pRes + i, &ge);
-			}
+#ifndef BeamCrypto_ExternalGej
+			if (_countof(pGej) == nCount)
+				Point_Compact_from_Ge(pRes + i, (secp256k1_ge*)(pGej + i));
 			else
-				ZERO_OBJ(pRes[i]);
+#endif // BeamCrypto_ExternalGej
+				Point_Compact_from_Gej(pRes + i, pGej + i);
+
+			Gej_Destroy(pGej + i);
 		}
+		else
+			ZERO_OBJ(pRes[i]);
 	}
 
 	return c_KeyKeeper_Status_Ok;
@@ -2505,7 +2827,9 @@ typedef struct
 __stack_hungry__
 static int KernelUpdateKeysEx(TxKernelCommitments* pComms, const KernelKeys* pKeys, const TxKernelCommitments* pAdd)
 {
-	secp256k1_gej pGej[2];
+	gej_t pGej[2];
+	Gej_Init(pGej);
+	Gej_Init(pGej + 1);
 
 	MulG(pGej, &pKeys->m_kKrn);
 	MulG(pGej + 1, &pKeys->m_kNonce);
@@ -2524,10 +2848,18 @@ static int KernelUpdateKeysEx(TxKernelCommitments* pComms, const KernelKeys* pKe
 		wrap_gej_add_ge_var(pGej + 1, pGej + 1, &ge);
 	}
 
+#ifdef BeamCrypto_ExternalGej
+	Point_Compact_from_Gej(&pComms->m_Commitment, pGej);
+	Point_Compact_from_Gej(&pComms->m_NoncePub, pGej + 1);
+#else // BeamCrypto_ExternalGej
 	Point_Gej_2_Normalize(pGej);
 
 	Point_Compact_from_Ge(&pComms->m_Commitment, (secp256k1_ge*) pGej);
 	Point_Compact_from_Ge(&pComms->m_NoncePub, (secp256k1_ge*) (pGej + 1));
+#endif // BeamCrypto_ExternalGej
+
+	Gej_Destroy(pGej);
+	Gej_Destroy(pGej + 1);
 
 	return 1;
 }
@@ -3013,11 +3345,20 @@ typedef struct
 #	define c_MultiMac_nBits_Offline 4
 #endif // BeamCrypto_ScarceStack
 
+#ifdef BeamCrypto_ExternalGej
+
+typedef struct
+{
+	gej_t m_pPubGJG[3]; // gen.G, gen.J, ser.G
+
+} ShieldedOfflineContext;
+
+#else // BeamCrypto_ExternalGej
+
 typedef struct
 {
 	secp256k1_ge_storage m_pPt[c_MultiMac_OddCount(c_MultiMac_nBits_Offline)]; // odd powers
 } OfflineGenerator;
-
 
 typedef struct
 {
@@ -3025,6 +3366,9 @@ typedef struct
 	secp256k1_fe m_zDenom;
 
 } ShieldedOfflineContext;
+
+#endif // BeamCrypto_ExternalGej
+
 
 typedef struct
 {
@@ -3082,8 +3426,20 @@ static void ShieldedViewerInit(ShieldedViewer* pRes, uint32_t iViewer, const Key
 	wrap_scalar_mul(&pRes->m_Ser.m_kCoFactor, &pRes->m_Ser.m_kCoFactor, &sk);
 }
 
-static void MulGJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
+static void MulGJ(gej_t* pGej, const secp256k1_scalar* pK)
 {
+#ifdef BeamCrypto_ExternalGej
+
+	MulG(pGej, pK);
+
+	gej_t gej;
+	Gej_Init(&gej);
+	MulJ(&gej, pK + 1);
+
+	Gej_Add(pGej, pGej, &gej);
+	Gej_Destroy(&gej);
+
+#else // BeamCrypto_ExternalGej
 	MultiMac_Context ctx;
 	ctx.m_pRes = pGej;
 	ctx.m_Fast.m_Count = 0;
@@ -3092,6 +3448,7 @@ static void MulGJ(secp256k1_gej* pGej, const secp256k1_scalar* pK)
 	ctx.m_Secure.m_pK = pK;
 
 	MultiMac_Calculate(&ctx);
+#endif // BeamCrypto_ExternalGej
 }
 
 __stack_hungry__
@@ -3164,11 +3521,21 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 	// kG -> serial preimage and spend sk
 	ShieldedGetSpendKey(pCtx, pK, !pCtx->m_IsOffline, &hv, &sk);
 
+	gej_t gej;
+	Gej_Init(&gej);
+
+#ifndef BeamCrypto_ExternalGej
 	MultiMac_Context mmCtx;
-	secp256k1_gej gej;
+#endif // BeamCrypto_ExternalGej
 
 	if (pCtx->m_IsOffline)
 	{
+#ifdef BeamCrypto_ExternalGej
+
+		Gej_MulFast(&gej, pCtx->u.m_pOffline->m_pPubGJG + 2, &sk); // ser.G
+
+#else // BeamCrypto_ExternalGej
+
 		mmCtx.m_pRes = &gej;
 		mmCtx.m_Secure.m_Count = 0;
 		mmCtx.m_Fast.m_WndBits = c_MultiMac_nBits_Offline;
@@ -3181,6 +3548,8 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 		mmCtx.m_Fast.m_pGen0 = pCtx->u.m_pOffline->m_pPubGJG[2].m_pPt; // ser.G
 
 		MultiMac_Calculate(&mmCtx);
+
+#endif // BeamCrypto_ExternalGej
 	}
 	else
 		MulG(&gej, &sk); // spend pk
@@ -3206,6 +3575,19 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 		wrap_scalar_mul(pN, pK, &sk);
 		wrap_scalar_mul(pN + 1, pK + 1, &sk);
 
+#ifdef BeamCrypto_ExternalGej
+
+		Gej_MulFast(&gej, pCtx->u.m_pOffline->m_pPubGJG, pN);
+
+		gej_t gej2;
+		Gej_Init(&gej2);
+
+		Gej_MulFast(&gej2, pCtx->u.m_pOffline->m_pPubGJG + 1, pN + 1);
+		Gej_Add(&gej, &gej, &gej2);
+
+		Gej_Destroy(&gej2);
+
+#else // BeamCrypto_ExternalGej
 		MultiMac_WNaf pWnaf[2];
 
 		mmCtx.m_Fast.m_Count = 2;
@@ -3214,6 +3596,8 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 		mmCtx.m_Fast.m_pGen0 = pCtx->u.m_pOffline->m_pPubGJG[0].m_pPt; // gen.G, gen.J
 
 		MultiMac_Calculate(&mmCtx);
+#endif // BeamCrypto_ExternalGej
+
 	}
 	else
 	{
@@ -3251,6 +3635,8 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 	Signature_GetChallengeEx(&pRes->m_NoncePub, &hv, &sk);
 	Signature_SignPartialEx(pRes->m_pK, &sk, pK, pN);
 	Signature_SignPartialEx(pRes->m_pK + 1, &sk, pK + 1, pN + 1);
+
+	Gej_Destroy(&gej);
 }
 
 PROTO_METHOD(CreateShieldedVouchers)
@@ -3320,21 +3706,35 @@ void OfflineAddr_Init(OfflineAddr* pRes, const KeyKeeper* p, uint32_t iAddr)
 	ShieldedViewer viewer;
 	ShieldedViewerInit(&viewer, iAddr, p);
 
-	secp256k1_gej pGej[3];
+	pRes->m_Gen_Secret = viewer.m_Gen.m_Secret;
+	pRes->m_Ser_Secret = viewer.m_Ser.m_Secret;
+
+	gej_t pGej[3];
+	Gej_Init(pGej);
+	Gej_Init(pGej + 1);
+	Gej_Init(pGej + 2);
+
 	MulG(pGej, &viewer.m_Gen.m_kCoFactor);
 	MulJ(pGej + 1, &viewer.m_Gen.m_kCoFactor);
 	MulG(pGej + 2, &viewer.m_Ser.m_kCoFactor);
 
+#ifdef BeamCrypto_ExternalGej
+	Point_Compact_from_Gej(&pRes->m_Gen_PkG, pGej);
+	Point_Compact_from_Gej(&pRes->m_Gen_PkJ, pGej + 1);
+	Point_Compact_from_Gej(&pRes->m_Ser_PkG, pGej + 2);
+#else // BeamCrypto_ExternalGej
 	secp256k1_fe pBuf[_countof(pGej)];
 	secp256k1_fe zDenom;
 	Point_Gej_BatchRescale(pGej, _countof(pGej), pBuf, &zDenom, 1);
 
-	pRes->m_Gen_Secret = viewer.m_Gen.m_Secret;
-	pRes->m_Ser_Secret = viewer.m_Ser.m_Secret;
-
 	Point_Compact_from_Ge(&pRes->m_Gen_PkG, (secp256k1_ge*) pGej);
 	Point_Compact_from_Ge(&pRes->m_Gen_PkJ, (secp256k1_ge*) (pGej + 1));
 	Point_Compact_from_Ge(&pRes->m_Ser_PkG, (secp256k1_ge*) (pGej + 2));
+#endif // BeamCrypto_ExternalGej
+
+	Gej_Destroy(pGej + 2);
+	Gej_Destroy(pGej + 1);
+	Gej_Destroy(pGej);
 }
 
 __stack_hungry__
@@ -3442,16 +3842,27 @@ PROTO_METHOD(CreateShieldedInput_1)
 
 	// output commitment
 	CustomGenerator aGen;
+#ifdef BeamCrypto_ExternalGej
+	Gej_Init(&aGen);
+#endif // BeamCrypto_ExternalGej
+
 	if (fmt.m_AssetID)
 		CoinID_GenerateAGen(fmt.m_AssetID, &aGen);
 
-	secp256k1_gej gej;
+	gej_t gej;
+	Gej_Init(&gej);
+
 	CoinID_getCommRaw(&p->u.m_Ins.m_skOutp, fmt.m_Amount, fmt.m_AssetID ? &aGen : 0, &gej);
 	secp256k1_sha256_write_Gej(&pOracle->m_sha, &gej);
+
+#ifdef BeamCrypto_ExternalGej
+	Gej_Destroy(&aGen);
+#endif // BeamCrypto_ExternalGej
 
 	// Spend pk
 	MulG(&gej, &p->u.m_Ins.m_skSpend);
 	secp256k1_sha256_write_Gej(&pOracle->m_sha, &gej);
+	Gej_Destroy(&gej);
 
 	// finalyze
 	p->u.m_Ins.m_Sigma_M = sip.m_Sigma_M;
@@ -3499,7 +3910,8 @@ PROTO_METHOD(CreateShieldedInput_2)
 
 
 	{
-		secp256k1_gej gej;
+		gej_t gej;
+		Gej_Init(&gej);
 		secp256k1_ge ge;
 
 		secp256k1_scalar e;
@@ -3513,6 +3925,7 @@ PROTO_METHOD(CreateShieldedInput_2)
 
 		Point_Ge_from_Gej(&ge, &gej);
 		Point_Compact_from_Ge(&pOut->m_NoncePub, &ge);
+		Gej_Destroy(&gej);
 
 		Oracle o2;
 		Oracle_Init(&o2);
@@ -3609,12 +4022,13 @@ PROTO_METHOD(CreateShieldedInput_4)
 		SECURE_ERASE_OBJ(u);
 	}
 
-	secp256k1_gej gej;
+	gej_t gej;
 	secp256k1_ge ge;
 
 	if (!Point_Ge_from_Compact(&ge, pG_Last))
 		return MakeStatus(c_KeyKeeper_Status_Unspecified, 22); // import failed
 
+	Gej_Init(&gej);
 	MulG(&gej, &k);
 	wrap_gej_add_ge_var(&gej, &gej, &ge);
 
@@ -3622,6 +4036,7 @@ PROTO_METHOD(CreateShieldedInput_4)
 	Point_Compact_from_Ge(&pOut->m_G_Last, &ge);
 	secp256k1_sha256_write_CompactPoint(&pOracle->m_sha, &pOut->m_G_Last);
 
+	Gej_Destroy(&gej);
 
 	secp256k1_scalar e, xPwr;
 	Oracle_NextScalar(pOracle, &e);
@@ -3743,8 +4158,30 @@ int TxSendShielded_OfflineAddrCheck(TxSendShieldedContext* pCtx)
 	return Signature_IsValid_Ex(&pCtx->m_pSh->u.m_Offline.m_Sig, &pCtx->m_hvKrn, &pCtx->m_pIn->m_Mut.m_Peer);
 }
 
+#ifdef BeamCrypto_ExternalGej
+
+int Point_Gej_from_CompactNnz(gej_t* pGej, const CompactPoint* pPt)
+{
+	secp256k1_ge ge;
+	if (!Point_Ge_from_CompactNnz(&ge, pPt))
+		return 0;
+
+	Point_Gej_from_Ge(pGej, &ge);
+	return 1;
+}
+
+int TxSendShielded_ImportGens(ShieldedOfflineContext* pOff, TxSendShieldedContext* pCtx)
+{
+	return
+		Point_Gej_from_CompactNnz(pOff->m_pPubGJG, &pCtx->m_pSh->u.m_Offline.m_Addr.m_Gen_PkG) &&
+		Point_Gej_from_CompactNnz(pOff->m_pPubGJG + 1, &pCtx->m_pSh->u.m_Offline.m_Addr.m_Gen_PkJ) &&
+		Point_Gej_from_CompactNnz(pOff->m_pPubGJG + 2, &pCtx->m_pSh->u.m_Offline.m_Addr.m_Ser_PkG);
+}
+
+#else // BeamCrypto_ExternalGej
+
 __stack_hungry__
-int TxSendShielded_ImportGen(secp256k1_gej* pOdds, const CompactPoint* pPt)
+int TxSendShielded_ImportGen(gej_t* pOdds, const CompactPoint* pPt)
 {
 	secp256k1_ge ge;
 	if (!Point_Ge_from_CompactNnz(&ge, pPt))
@@ -3757,7 +4194,7 @@ int TxSendShielded_ImportGen(secp256k1_gej* pOdds, const CompactPoint* pPt)
 __stack_hungry__
 int TxSendShielded_ImportGens(ShieldedOfflineContext* pOff, TxSendShieldedContext* pCtx)
 {
-	secp256k1_gej pOdds[_countof(pOff->m_pPubGJG->m_pPt) * 3];
+	gej_t pOdds[_countof(pOff->m_pPubGJG->m_pPt) * 3];
 
 	if (!TxSendShielded_ImportGen(pOdds, &pCtx->m_pSh->u.m_Offline.m_Addr.m_Gen_PkG) ||
 		!TxSendShielded_ImportGen(pOdds + _countof(pOff->m_pPubGJG->m_pPt), &pCtx->m_pSh->u.m_Offline.m_Addr.m_Gen_PkJ) ||
@@ -3767,6 +4204,8 @@ int TxSendShielded_ImportGens(ShieldedOfflineContext* pOff, TxSendShieldedContex
 	Point_Gej_ToCommonDenominator(pOdds, _countof(pOdds), pOff->m_pPubGJG->m_pPt, &pOff->m_zDenom);
 	return 1;
 }
+
+#endif // BeamCrypto_ExternalGej
 
 __stack_hungry__
 void TxSendShielded_OfflineMakeTicket2(TxSendShieldedContext* pCtx, ShieldedOfflineContext* pOff)
@@ -3787,11 +4226,22 @@ __stack_hungry__
 int TxSendShielded_OfflineMakeTicket(TxSendShieldedContext* pCtx)
 {
 	ShieldedOfflineContext wrk;
-	if (!TxSendShielded_ImportGens(&wrk, pCtx))
-		return 0;
 
-	TxSendShielded_OfflineMakeTicket2(pCtx, &wrk);
-	return 1;
+#ifdef BeamCrypto_ExternalGej
+	for (uint32_t i = 0; i < _countof(wrk.m_pPubGJG); i++)
+		Gej_Init(wrk.m_pPubGJG + i);
+#endif // BeamCrypto_ExternalGej
+
+	int res = TxSendShielded_ImportGens(&wrk, pCtx);
+	if (res)
+		TxSendShielded_OfflineMakeTicket2(pCtx, &wrk);
+
+#ifdef BeamCrypto_ExternalGej
+	for (uint32_t i = _countof(wrk.m_pPubGJG); i--; )
+		Gej_Destroy(wrk.m_pPubGJG + i);
+#endif // BeamCrypto_ExternalGej
+
+	return res;
 }
 
 typedef struct
@@ -3837,7 +4287,7 @@ void TxSendShielded_PrepareRangeProofRecover(TxSendShieldedContext* pCtx, TxSend
 	union {
 		NonceGenerator ng; // no really secret
 		Oracle o2;
-		secp256k1_gej gej;
+		gej_t gej;
 		secp256k1_scalar skExtra;
 	} u;
 
@@ -3852,9 +4302,20 @@ void TxSendShielded_PrepareRangeProofRecover(TxSendShieldedContext* pCtx, TxSend
 
 	CustomGenerator* pAGen = pCtx->m_Txs.m_Aid ? &pRp->u.m_AGen : 0;
 	if (pAGen)
+	{
+#ifdef BeamCrypto_ExternalGej
+		Gej_Init(pAGen);
+#endif // BeamCrypto_ExternalGej
 		CoinID_GenerateAGen(pCtx->m_Txs.m_Aid, pAGen); // assume that's not the peak stack consumer
+	}
 
+	Gej_Init(&u.gej);
 	CoinID_getCommRaw(&pCtx->m_skKrn, pCtx->m_Txs.m_NetAmount, pAGen, &u.gej); // output commitment
+
+#ifdef BeamCrypto_ExternalGej
+	if (pAGen)
+		Gej_Destroy(pAGen);
+#endif // BeamCrypto_ExternalGej
 
 	// We have the commitment, and params that are supposed to be packed in the rangeproof.
 	// Recover the parameters, make sure they match
@@ -3869,6 +4330,8 @@ void TxSendShielded_PrepareRangeProofRecover(TxSendShieldedContext* pCtx, TxSend
 	secp256k1_sha256_write_CompactPoint(&oracle.m_sha, &pCtx->m_pSh->u.m_Voucher.m_NoncePub);
 	secp256k1_sha256_write_Gej(&oracle.m_sha, &u.gej);
 	secp256k1_sha256_write_CompactPointOptional2(&oracle.m_sha, &pCtx->m_pIn->m_ptAssetGen, !IsUintBigZero(&pCtx->m_pIn->m_ptAssetGen.m_X)); // starting from HF3 it's mandatory
+
+	Gej_Destroy(&u.gej);
 
 	{
 		u.o2 = oracle;

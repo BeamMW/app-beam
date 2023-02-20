@@ -74,15 +74,18 @@ void MultiMac_Calculate(MultiMac_Context*);
 
 typedef struct
 {
+#ifdef BeamCrypto_ExternalGej
+	AffinePoint m_pGenRangeproof[c_MultiMac_Fast_nGenerators][1];
+	AffinePoint m_GenH;
+	AffinePoint m_pGenGJ[2];
+#else // BeamCrypto_ExternalGej
 	secp256k1_ge_storage m_pGenRangeproof[c_MultiMac_Fast_nGenerators][c_MultiMac_OddCount(c_MultiMac_nBits_Rangeproof)];
 	secp256k1_ge_storage m_pGenH[c_MultiMac_OddCount(c_MultiMac_nBits_H)];
 	MultiMac_Secure m_pGenGJ[2];
+#endif // BeamCrypto_ExternalGej
 
 } Context;
 
 Context* Context_get();
 
-// simplified versions
-void MulPoint(secp256k1_gej*, const MultiMac_Secure*, const secp256k1_scalar*);
-void MulG(secp256k1_gej*, const secp256k1_scalar*);
 void Sk2Pk(UintBig*, secp256k1_scalar*);

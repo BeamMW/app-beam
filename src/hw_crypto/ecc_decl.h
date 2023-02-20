@@ -30,6 +30,8 @@
 #include "secp256k1/src/group.h"
 #include "secp256k1/src/hash.h"
 
+#include "cx.h"
+
 typedef secp256k1_sha256 secp256k1_sha256_t;
 typedef secp256k1_hmac_sha256 secp256k1_hmac_sha256_t;
 
@@ -59,16 +61,30 @@ typedef struct
 	uint8_t m_Y;
 } CompactPoint;
 
-void Point_Gej_from_Ge(secp256k1_gej*, const secp256k1_ge*);
-void Point_Gej_BatchRescale(secp256k1_gej*, unsigned int nCount, secp256k1_fe* pBuf, secp256k1_fe* pZDenom, int bNormalize);
 
-void Point_Ge_from_Gej(secp256k1_ge*, const secp256k1_gej*);
+typedef struct
+{
+	UintBig m_X;
+	UintBig m_Y;
+} AffinePoint;
 
 int Point_Ge_from_Compact(secp256k1_ge*, const CompactPoint*);
 int Point_Ge_from_CompactNnz(secp256k1_ge*, const CompactPoint*);
-
 void Point_Compact_from_Ge(CompactPoint*, const secp256k1_ge*);
-void Point_Compact_from_Gej(CompactPoint*, const secp256k1_gej*);
-
 uint8_t Point_Compact_from_Ge_Ex(UintBig* pX, const secp256k1_ge*);
-uint8_t Point_Compact_from_Gej_Ex(UintBig* pX, const secp256k1_gej*);
+
+#ifdef BeamCrypto_ExternalGej
+
+typedef cx_ecpoint_t gej_t;
+
+void Gej_Init(gej_t*);
+void Gej_Destroy(gej_t*);
+int Gej_Is_infinity(const gej_t* p);
+void Gej_Add(gej_t* p, const gej_t* a, const gej_t* b);
+void Gej_Mul_Ub(gej_t* p, const gej_t* a, const UintBig* k, int bFast);
+void Gej_Mul2_Fast(gej_t* p, const gej_t* a, const UintBig* ka, const gej_t* b, const UintBig* kb);
+void Gej_Set_Affine(gej_t* p, const AffinePoint* pAp);
+void Gej_Get_Affine(const gej_t* p, AffinePoint* pAp);
+
+
+#endif // BeamCrypto_ExternalGej
