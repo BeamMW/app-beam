@@ -1504,7 +1504,8 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 	NonceGenerator_NextScalar(&pWrk->m_NonceGen, &s);
 	MulG(pWrk->m_pGej + 1, &s); // can mul fast!
 
-	gej_t gej2;
+	gej_t gej1, gej2;
+	Gej_Init(&gej1);
 	Gej_Init(&gej2);
 
 	UintBig pK[2];
@@ -1555,6 +1556,7 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 		}
 
 		secp256k1_scalar* const pTrg = pS + mmCtx.m_Fast.m_Count;
+		mmCtx.m_Fast.m_Count++;
 
 #endif // BeamCrypto_ExternalGej
 
@@ -1574,27 +1576,30 @@ static void RangeProof_Calculate_S(RangeProof* const p, RangeProof_Worker* const
 
 		if (1 & iBit)
 		{
-			Gej_Set_Affine(pWrk->m_pGej, Context_get()->m_pGenRangeproof[iBit - 1]);
+			Gej_Set_Affine(&gej1, Context_get()->m_pGenRangeproof[iBit - 1]);
 			Gej_Set_Affine(&gej2, Context_get()->m_pGenRangeproof[iBit]);
 
-			Gej_Mul2_Fast(pWrk->m_pGej, pWrk->m_pGej, pK, &gej2, pK + 1);
+			Gej_Mul2_Fast(pWrk->m_pGej, &gej1, pK, &gej2, pK + 1);
 
 			Gej_Add(pWrk->m_pGej + 1, pWrk->m_pGej + 1, pWrk->m_pGej);
 		}
 
-#else // BeamCrypto_ExternalGej
-		mmCtx.m_Fast.m_Count++;
 #endif // BeamCrypto_ExternalGej
 	}
 
 #ifdef BeamCrypto_ExternalGej
+
 	Gej_Destroy(&gej2);
+	Gej_Destroy(&gej1);
+
 #else // BeamCrypto_ExternalGej
+
 	mmCtx.m_pRes = pWrk->m_pGej + 1;
 	MultiMac_Calculate(&mmCtx);
 
 	if (Calc_S_Naggle < Calc_S_Naggle_Max)
 		wrap_gej_add_var(pWrk->m_pGej + 1, pWrk->m_pGej + 1, pWrk->m_pGej);
+
 #endif // BeamCrypto_ExternalGej
 }
 
