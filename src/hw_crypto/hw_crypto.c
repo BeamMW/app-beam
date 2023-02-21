@@ -161,8 +161,6 @@ void Point_Ge_from_Gej(secp256k1_ge* pGe, const gej_t* p)
 		AffinePoint ap;
 		Gej_Get_Affine(p, &ap);
 
-		Suffer(1000); // Very heavy
-
 		Point_Ge_from_Affine(pGe, &ap);
 	}
 }

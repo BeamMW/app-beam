@@ -1048,6 +1048,8 @@ void Gej_CloneSafe(gej_t* p, const gej_t* b)
     }
 }
 
+void Suffer(uint16_t n);
+
 void Gej_Add(gej_t* p, const gej_t* a, const gej_t* b)
 {
     if (Gej_Is_infinity(a))
@@ -1065,6 +1067,8 @@ void Gej_Add(gej_t* p, const gej_t* a, const gej_t* b)
         {
             Gej_AllocSafe(p);
             Gej_OnRet_Pt(p, cx_ecpoint_add(p, a, b));
+
+            Suffer(20);
         }
     }
 }
@@ -1082,6 +1086,9 @@ void Gej_Mul_Ub(gej_t* p, const gej_t* a, const UintBig* k, int bFast)
             cx_ecpoint_rnd_scalarmul(p, k->m_pVal, sizeof(k->m_pVal));
 
         Gej_OnRet_Pt(p, res);
+
+        Suffer(bFast ? 150 : 250);
+
     }
 }
 
@@ -1096,8 +1103,10 @@ void Gej_Mul2_Fast(gej_t* p, const gej_t* a, const UintBig* ka, const gej_t* b, 
         else
         {
             Gej_AllocSafe(p);
-            cx_err_t res = cx_ecpoint_double_scalarmul(p, a, b, ka->m_pVal, sizeof(ka->m_pVal), kb->m_pVal, sizeof(kb->m_pVal));
+            cx_err_t res = cx_ecpoint_double_scalarmul(p, (gej_t*) a, (gej_t*) b, ka->m_pVal, sizeof(ka->m_pVal), kb->m_pVal, sizeof(kb->m_pVal));
             Gej_OnRet_Pt(p, res);
+
+            Suffer(250);
         }
     }
 
@@ -1113,6 +1122,8 @@ void Gej_Get_Affine(const gej_t* p, AffinePoint* pAp)
 {
     assert(!Gej_Is_infinity(p));
     Gej_OnRet(cx_ecpoint_export(p, pAp->m_X.m_pVal, sizeof(pAp->m_X.m_pVal), pAp->m_Y.m_pVal, sizeof(pAp->m_Y.m_pVal)));
+
+    Suffer(20);
 }
 
 #endif // BeamCrypto_ExternalGej
