@@ -479,14 +479,22 @@ void KeyKeeper_DisplayEndpoint(KeyKeeper* p, AddrID addrID, const UintBig* pAddr
 
 //////////////////////
 // Confirm Spend
+
+Amount get_TotalFee()
+{
+    return
+        g_KeyKeeper.u.m_TxBalance.m_ImplicitFee +
+        g_Ux_U.m_Spend.m_pSummary->m_Krn.m_Fee;
+}
+
 UX_STEP_NOCB(ux_step_send_review, bb, { "Please review", "send transaction" });
 #ifdef HAVE_4LINES
 UX_STEP_NOCB_INIT(ux_step_send_amount_asset, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_NetAmount), PrintAssetID(g_szLine2, g_Ux_U.m_Spend.m_pSummary->m_Aid)), { "Amount", g_szLine1, "Asset", g_szLine2 });
-UX_STEP_NOCB_INIT(ux_step_send_fee_type, bnnn, (PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Krn.m_Fee), PrintTxType(g_szLine2)), { "Fee", g_szLine1, "Type", g_szLine2 });
+UX_STEP_NOCB_INIT(ux_step_send_fee_type, bnnn, (PrintAmount(g_szLine1, get_TotalFee()), PrintTxType(g_szLine2)), { "Fee", g_szLine1, "Type", g_szLine2 });
 #else // HAVE_4LINES
 UX_STEP_NOCB_INIT(ux_step_send_amount, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_NetAmount), { "Amount", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_asset, bn, PrintAssetID(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Aid), { "Asset", g_szLine1 });
-UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1, g_Ux_U.m_Spend.m_pSummary->m_Krn.m_Fee), { "Fee", g_szLine1 });
+UX_STEP_NOCB_INIT(ux_step_send_fee, bn, PrintAmount(g_szLine1,  get_TotalFee()), { "Fee", g_szLine1 });
 UX_STEP_NOCB_INIT(ux_step_send_type, bn, PrintTxType(g_szLine1), { "Type", g_szLine1 });
 #endif // HAVE_4LINES
 UX_STEP_NOCB(ux_step_send_receiver, pb, { &C_icon_certificate, "Receiver Endpoint" });
