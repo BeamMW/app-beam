@@ -3385,7 +3385,7 @@ typedef struct
 
 	union
 	{
-		const ShieldedOfflineContext* m_pOffline;
+		ShieldedOfflineContext* m_pOffline;
 		const ShieldedViewer* m_pViewer;
 	} u;
 
@@ -3539,6 +3539,7 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 #ifdef BeamCrypto_ExternalGej
 
 		Gej_MulFast(&gej, pCtx->u.m_pOffline->m_pPubGJG + 2, &sk); // ser.G
+		Gej_Destroy(pCtx->u.m_pOffline->m_pPubGJG + 2);
 
 #else // BeamCrypto_ExternalGej
 
@@ -3584,11 +3585,14 @@ static void CreateVoucherInternal(const ShieldedVoucherContext* pCtx, ShieldedVo
 #ifdef BeamCrypto_ExternalGej
 
 		Gej_MulFast(&gej, pCtx->u.m_pOffline->m_pPubGJG, pN);
+		Gej_Destroy(pCtx->u.m_pOffline->m_pPubGJG);
 
 		gej_t gej2;
 		Gej_Init(&gej2);
 
 		Gej_MulFast(&gej2, pCtx->u.m_pOffline->m_pPubGJG + 1, pN + 1);
+		Gej_Destroy(pCtx->u.m_pOffline->m_pPubGJG + 1);
+
 		Gej_Add(&gej, &gej, &gej2);
 
 		Gej_Destroy(&gej2);
