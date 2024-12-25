@@ -49,39 +49,6 @@ void PrintHex(char* sz, const uint8_t* p, unsigned int n)
     *sz = 0;
 }
 
-void PrintUintBig(char* sz, const UintBig* p)
-{
-    PrintHex(sz, p->m_pVal, sizeof(UintBig));
-}
-
-void PrintUintBig_4(char* sz, const UintBig* p, uint32_t iStep)
-{
-    const uint8_t* pSrc = p->m_pVal + iStep * 8;
-
-    for (unsigned int i = 0; ; )
-    {
-        PrintHex(sz, pSrc, 2);
-        if (++i == 4)
-            break;
-
-        sz += 4;
-        pSrc += 2;
-
-        *sz++ = ' ';
-    }
-}
-
-void PrintUintBig_8(char* sz, const UintBig* p, uint32_t iStep)
-{
-    const uint8_t* pSrc = p->m_pVal + iStep * 8;
-
-    PrintHex(sz, pSrc, 4);
-    sz[8] = ' ';
-    sz[9] = '-';
-    sz[10] = ' ';
-    PrintHex(sz + 11, pSrc + 4, 4);
-}
-
 uint32_t Internal_Decimal_GetLen(uint32_t val)
 {
     uint32_t len = 0;
@@ -194,11 +161,6 @@ union
 
 } g_Ux_U;
 
-void PrintAddr_2Line(const UintBig* pAddr, uint32_t iStep)
-{
-    PrintUintBig_4(g_szLine1, pAddr, iStep);
-    PrintUintBig_4(g_szLine2, pAddr, iStep + 1);
-}
 
 #define c_Endpoint_Line_Len (c_KeyKeeper_Endpoint_Len / 4)
 
@@ -221,13 +183,6 @@ void PrintEndpoint_2Line(const char* szEndpoint, uint32_t iStep)
 #ifdef HAVE_4LINES
 static char g_szLine3[c_LineMaxLen + 1];
 static char g_szLine4[c_LineMaxLen + 1];
-
-void PrintAddr_4Line(const UintBig* pAddr)
-{
-    PrintAddr_2Line(pAddr, 0);
-    PrintUintBig_4(g_szLine3, pAddr, 2);
-    PrintUintBig_4(g_szLine4, pAddr, 3);
-}
 
 void PrintEndpoint_4Line(const char* szEndpoint)
 {
@@ -505,12 +460,6 @@ UX_STEP_NOCB_INIT(ux_step_send_receiver_1, nn, PrintEndpoint_2Line(g_Ux_U.m_Spen
 UX_STEP_NOCB_INIT(ux_step_send_receiver_2, nn, PrintEndpoint_2Line(g_Ux_U.m_Spend.m_szEndpoint, 2), { g_szLine1, g_szLine2 });
 #endif // HAVE_4LINES
 //UX_STEP_NOCB(ux_step_send_krnid, pb, { &C_icon_certificate, "Kernel ID" });
-//#ifdef HAVE_4LINES
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_x, nnnn, PrintAddr_4Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID), { g_szLine1, g_szLine2, g_szLine3, g_szLine4 });
-//#else // HAVE_4LINES
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_1, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID, 0), { g_szLine1, g_szLine2 });
-//UX_STEP_NOCB_INIT(ux_step_send_krnid_2, nn, PrintAddr_2Line(g_Ux_U.m_Spend.m_pSummary->m_pKrnID, 2), { g_szLine1, g_szLine2 });
-//#endif // HAVE_4LINES
 UX_STEP_CB(ux_step_send_Ok, pb, EndModal(c_Modal_Ok), { &C_icon_validate_14, "Approve" });
 UX_STEP_CB(ux_step_send_Cancel, pb, EndModal(c_Modal_Cancel), { &C_icon_crossmark, "Reject" });
 
