@@ -37,7 +37,7 @@
 #	define UNUSED(x) (x)
 #endif // UNUSED
 
-#if BeamCrypto_ScarceStack
+#ifdef BeamCrypto_ScarceStack
 #	define __stack_hungry__ __attribute__((noinline))
 #else // BeamCrypto_ScarceStack
 #	define __stack_hungry__
@@ -48,6 +48,7 @@
 #include "secp256k1/src/scalar_impl.h"
 #include "secp256k1/src/field_impl.h"
 #include "secp256k1/src/hash_impl.h"
+#include "secp256k1/src/int128_impl.h"
 
 #if defined(__clang__) || defined(__GNUC__) || defined(__GNUG__)
 #	pragma GCC diagnostic pop
@@ -59,11 +60,13 @@
 #define SECURE_ERASE_OBJ(x) SecureEraseMem(&(x), sizeof(x))
 #define ZERO_OBJ(x) memset(&(x), 0, sizeof(x))
 
-#ifdef USE_SCALAR_4X64
+#if defined(SECP256K1_WIDEMUL_INT128)
 typedef uint64_t secp256k1_scalar_uint;
-#else // USE_SCALAR_4X64
+#elif defined(SECP256K1_WIDEMUL_INT64)
 typedef uint32_t secp256k1_scalar_uint;
-#endif // USE_SCALAR_4X64
+#else
+#	error 
+#endif
 
 #ifndef _countof
 #	define _countof(arr) sizeof(arr) / sizeof((arr)[0])
@@ -349,16 +352,6 @@ static void WNaf_Cursor_MoveNext(MultiMac_WNaf* p, const secp256k1_scalar* pK, u
 		p->m_iElement += nMaxElements;
 }
 
-__attribute__((noinline))
-void mem_cmov(unsigned int* pDst, const unsigned int* pSrc, int flag, unsigned int nWords)
-{
-	const unsigned int mask0 = flag + ~((unsigned int) 0);
-	const unsigned int mask1 = ~mask0;
-
-	for (unsigned int n = 0; n < nWords; n++)
-		pDst[n] = (pDst[n] & mask0) | (pSrc[n] & mask1);
-}
-
 static void MultiMac_Calculate_LoadFast(const MultiMac_Context* p, secp256k1_ge* pGe, unsigned int iGen, unsigned int iElem)
 {
 	unsigned int nPitch = c_MultiMac_OddCount(p->m_Fast.m_WndBits);
@@ -478,16 +471,7 @@ static void MultiMac_Calculate_Secure_Read(secp256k1_ge* pGe, const MultiMac_Sec
 	ZERO_OBJ(ges); // suppress warning: potential unanitialized var used
 
 	for (unsigned int j = 0; j < c_MultiMac_Secure_nCount; j++)
-	{
-		static_assert(sizeof(ges) == sizeof(pGen->m_pPt[j]), "");
-		static_assert(!(sizeof(ges) % sizeof(unsigned int)), "");
-
-		mem_cmov(
-			(unsigned int*) &ges,
-			(unsigned int*)(pGen->m_pPt + j),
-			iElement == j,
-			sizeof(ges) / sizeof(unsigned int));
-	}
+		secp256k1_ge_storage_cmov(&ges, pGen->m_pPt + j, iElement == j);
 
 	secp256k1_ge_from_storage(pGe, &ges); // inline is ok here
 	SECURE_ERASE_OBJ(ges);
@@ -506,7 +490,7 @@ static void MultiMac_Calculate_SecureBit(const MultiMac_Context* p, unsigned int
 
 	for (unsigned int i = 0; i < p->m_Secure.m_Count; i++)
 	{
-		unsigned int iElement = (p->m_Secure.m_pK[i].d[iWord] >> nShift) & nMsk;
+		unsigned int iElement = (unsigned int) ((p->m_Secure.m_pK[i].d[iWord] >> nShift) & nMsk);
 		const MultiMac_Secure* pGen = p->m_Secure.m_pGen + i;
 
 		MultiMac_Calculate_Secure_Read(&ge, pGen, iElement);
